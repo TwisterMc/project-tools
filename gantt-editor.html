@@ -310,8 +310,8 @@
   }
   .weekend-bg {
     position: absolute;
-    top: 0; bottom: 0;
-    background: rgba(0,0,0,0.18);
+    top: 0;
+    background: rgba(255, 255, 255, 0.05);
     pointer-events: none;
     z-index: 0;
   }
@@ -865,13 +865,48 @@ function renderGantt() {
   ganttRows.innerHTML = '';
   ganttRows.style.width = tw + 'px';
 
+  const days = diffDays(minDate, maxDate);
+  const totalH = rows.length * 36;
+
+  // Full-height weekend columns (drawn once on the container)
+  if (dayW < 14) {
+    let i = 0;
+    while (i < days) {
+      const d = addDays(minDate, i);
+      const dow = d.getDay();
+      const span = Math.min(7 - dow, days - i);
+      const satOffset = (6 - dow + 7) % 7;
+      if (satOffset < span) {
+        const wb = document.createElement('div');
+        wb.className = 'weekend-bg';
+        wb.style.left = ((i + satOffset) * dayW) + 'px';
+        wb.style.width = (Math.min(2, span - satOffset) * dayW) + 'px';
+        wb.style.height = totalH + 'px';
+        ganttRows.appendChild(wb);
+      }
+      i += span;
+    }
+  } else {
+    for (let i = 0; i < days; i++) {
+      const dow = addDays(minDate, i).getDay();
+      if (dow === 0 || dow === 6) {
+        const wb = document.createElement('div');
+        wb.className = 'weekend-bg';
+        wb.style.left = (i * dayW) + 'px';
+        wb.style.width = dayW + 'px';
+        wb.style.height = totalH + 'px';
+        ganttRows.appendChild(wb);
+      }
+    }
+  }
+
   // Today line
   const todayX = dateToX(new Date());
   if (todayX >= 0) {
     const todayLine = document.createElement('div');
     todayLine.className = 'today-line';
     todayLine.style.left = todayX + 'px';
-    todayLine.style.height = (rows.length * 36) + 'px';
+    todayLine.style.height = totalH + 'px';
     ganttRows.appendChild(todayLine);
   }
 
@@ -881,34 +916,17 @@ function renderGantt() {
     row.style.width = tw + 'px';
     row.dataset.id = task.TaskID;
 
-    // Grid lines and weekend backgrounds
-    const days = diffDays(minDate, maxDate);
+    // Grid lines only (weekend bg is now on the container)
     if (dayW < 14) {
-      // Week mode: grid lines and weekend shading per week
       let i = 0;
       while (i < days) {
         const d = addDays(minDate, i);
         const dow = d.getDay();
-        const daysUntilEndOfWeek = 7 - dow;
-        const span = Math.min(daysUntilEndOfWeek, days - i);
-
-        // Shade Sat+Sun within this week span
-        const satOffset = (6 - dow + 7) % 7; // days until Saturday
-        if (satOffset < span) {
-          const wb = document.createElement('div');
-          wb.className = 'weekend-bg';
-          wb.style.left = ((i + satOffset) * dayW) + 'px';
-          const shadeDays = Math.min(2, span - satOffset);
-          wb.style.width = (shadeDays * dayW) + 'px';
-          row.appendChild(wb);
-        }
-
-        // Grid line at start of each week
+        const span = Math.min(7 - dow, days - i);
         const gl = document.createElement('div');
         gl.className = 'grid-line';
         gl.style.left = (i * dayW) + 'px';
         row.appendChild(gl);
-
         i += span;
       }
       const glEnd = document.createElement('div');
@@ -917,26 +935,11 @@ function renderGantt() {
       row.appendChild(glEnd);
     } else {
       for (let i = 0; i < days; i++) {
-        const d = addDays(minDate, i);
-        const dow = d.getDay();
-        const isWeekend = dow === 0 || dow === 6;
-
-        // Weekend shading block
-        if (isWeekend) {
-          const wb = document.createElement('div');
-          wb.className = 'weekend-bg';
-          wb.style.left = (i * dayW) + 'px';
-          wb.style.width = dayW + 'px';
-          row.appendChild(wb);
-        }
-
-        // Vertical grid line on left edge of each day
         const gl = document.createElement('div');
         gl.className = 'grid-line';
         gl.style.left = (i * dayW) + 'px';
         row.appendChild(gl);
       }
-      // Final right-edge line
       const glEnd = document.createElement('div');
       glEnd.className = 'grid-line';
       glEnd.style.left = (days * dayW) + 'px';
@@ -1411,14 +1414,42 @@ function setZoom(val) {
   renderGantt();
 }
 
+// ─── INDEXEDDB PERSISTENCE ───────────────────────────────────────────────────
+function getDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('gantt', 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore('kv');
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = reject;
+  });
+}
+
+async function dbSet(key, val) {
+  try {
+    const db = await getDB();
+    const tx = db.transaction('kv', 'readwrite');
+    tx.objectStore('kv').put(val, key);
+  } catch(e) {}
+}
+
+async function dbGet(key) {
+  try {
+    const db = await getDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction('kv', 'readonly');
+      const req = tx.objectStore('kv').get(key);
+      req.onsuccess = e => resolve(e.target.result ?? null);
+      req.onerror = () => resolve(null);
+    });
+  } catch(e) { return null; }
+}
+
 // ─── RENDER ALL ──────────────────────────────────────────────────────────────
 function renderAll() {
   renderLeft();
   renderGantt();
-  try {
-    localStorage.setItem('gantt_state', JSON.stringify(state));
-    localStorage.setItem('gantt_name', document.getElementById('project-name').value);
-  } catch(e) {}
+  dbSet('state', state);
+  dbSet('name', document.getElementById('project-name').value);
 }
 
 // ─── KEYBOARD ────────────────────────────────────────────────────────────────
@@ -1437,18 +1468,16 @@ document.addEventListener('keydown', e => {
 // ─── INIT ────────────────────────────────────────────────────────────────────
 dayW = parseInt(document.getElementById('zoom-select').value) || 20;
 
-try {
-  const saved = localStorage.getItem('gantt_state');
+(async () => {
+  const saved = await dbGet('state');
   if (saved) {
-    const parsed = JSON.parse(saved);
-    state = { ...state, ...parsed };
-    const name = localStorage.getItem('gantt_name');
+    state = { ...state, ...saved };
+    const name = await dbGet('name');
     if (name) document.getElementById('project-name').value = name;
     collapsed.clear();
   }
-} catch(e) {}
-
-renderAll();
+  renderAll();
+})();
 </script>
 </body>
 </html>

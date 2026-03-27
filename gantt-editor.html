@@ -128,9 +128,20 @@
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    border-right: 1px solid var(--border);
     background: var(--surface);
   }
+
+  #panel-resize {
+    width: 5px;
+    flex-shrink: 0;
+    background: transparent;
+    cursor: col-resize;
+    position: relative;
+    z-index: 10;
+    border-left: 1px solid var(--border);
+    transition: border-color 0.15s;
+  }
+  #panel-resize:hover, #panel-resize.dragging { border-color: var(--accent); }
 
   #left-header {
     height: 64px;
@@ -546,6 +557,7 @@
   </div>
 
   <!-- GANTT -->
+  <div id="panel-resize"></div>
   <div id="gantt-panel">
     <div id="gantt-scroll">
       <div id="gantt-inner">
@@ -1451,6 +1463,34 @@ function renderAll() {
   dbSet('state', state);
   dbSet('name', document.getElementById('project-name').value);
 }
+
+// ─── PANEL RESIZE ────────────────────────────────────────────────────────────
+document.getElementById('panel-resize').addEventListener('mousedown', e => {
+  e.preventDefault();
+  const handle = e.currentTarget;
+  const panel = document.getElementById('left-panel');
+  handle.classList.add('dragging');
+  const startX = e.clientX;
+  const startW = panel.offsetWidth;
+
+  function onMove(e) {
+    const w = Math.max(160, Math.min(600, startW + e.clientX - startX));
+    panel.style.width = w + 'px';
+  }
+
+  function onUp() {
+    handle.classList.remove('dragging');
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }
+
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+});
 
 // ─── KEYBOARD ────────────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {

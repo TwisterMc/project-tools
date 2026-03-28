@@ -209,7 +209,8 @@
     gap: 4px;
     flex-shrink: 0;
   }
-  .task-row:hover .task-actions { display: flex; }
+  .task-row:hover .task-actions,
+  .task-row:focus-within .task-actions { display: flex; }
   .icon-btn {
     width: 20px; height: 20px;
     border: none; background: transparent;
@@ -808,7 +809,7 @@ function renderLeft() {
     row.setAttribute('role', 'button');
     row.setAttribute('aria-label', task.TaskName);
     row.addEventListener('keydown', ev => {
-      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openEditTask(task.TaskID); }
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); openEditTask(task.TaskID); }
     });
 
     // indent
@@ -1867,7 +1868,8 @@ document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'n' && !document.getElementById('modal-overlay').classList.contains('open')) {
     e.preventDefault(); openAddTask(null);
   }
-  if (e.key === 'Enter' && document.getElementById('modal-overlay').classList.contains('open')) {
+  if (e.key === 'Enter' && document.getElementById('modal-overlay').classList.contains('open') && document.activeElement.tagName !== 'BUTTON') {
+    e.preventDefault();
     saveTask();
   }
 });

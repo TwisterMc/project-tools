@@ -995,6 +995,9 @@ function renderGantt() {
       if (isParent) {
         // Drag parent bar — shifts all subtasks with it
         bar.addEventListener('mousedown', e => startDrag(e, task));
+        bar.addEventListener('mouseenter', e => showTooltip(e, task));
+        bar.addEventListener('mousemove', e => moveTooltip(e));
+        bar.addEventListener('mouseleave', hideTooltip);
       } else {
         const color = hueToColor(task.color);
         bar.style.background = color;

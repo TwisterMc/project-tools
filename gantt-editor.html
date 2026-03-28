@@ -1458,19 +1458,275 @@ function saveFile() {
 }
 
 function exportPNG() {
-  const panel = document.getElementById('gantt-scroll');
+  computeDateRange();
+  const rows = flatTasks();
+  if (!rows.length) { showToast('No tasks to export'); return; }
+
+  const leftW = document.getElementById('left-panel').offsetWidth;
+  const ganttW = totalWidth();
+  const ROW_H = 36;
+  const MONTHS_H = 28;
+  const DAYS_H = 36;
+  const HEADER_H = MONTHS_H + DAYS_H;
+  const totalW = leftW + 1 + ganttW; // +1 for divider
+  const totalH = HEADER_H + rows.length * ROW_H;
+
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const canvas = document.createElement('canvas');
-  canvas.width = panel.scrollWidth;
-  canvas.height = panel.scrollHeight;
+  canvas.width = totalW * dpr;
+  canvas.height = totalH * dpr;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#0f1117';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#555f78';
-  ctx.font = '13px DM Sans, sans-serif';
-  ctx.fillText('PNG export: use browser Print > Save as PDF for best results', 20, 30);
-  // Fallback message - proper screenshot would need html2canvas
+  ctx.scale(dpr, dpr);
+
+  const BG      = '#0f1117';
+  const SURFACE = '#171b24';
+  const BORDER  = '#2a3045';
+  const TEXT    = '#e8eaf0';
+  const TEXT2   = '#8892a8';
+  const TEXT3   = '#555f78';
+  const ACCENT  = '#4f8ef7';
+
+  const days = diffDays(minDate, maxDate);
+  const today = startOfDay(new Date());
+  const gx = leftW + 1; // gantt x offset
+
+  // ── Backgrounds ──
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, totalW, totalH);
+  ctx.fillStyle = SURFACE;
+  ctx.fillRect(0, 0, leftW, totalH);
+  ctx.fillStyle = SURFACE;
+  ctx.fillRect(gx, 0, ganttW, HEADER_H);
+
+  // Divider between left panel and gantt
+  ctx.fillStyle = BORDER;
+  ctx.fillRect(leftW, 0, 1, totalH);
+
+  // Header bottom border
+  ctx.fillStyle = BORDER;
+  ctx.fillRect(0, HEADER_H - 1, totalW, 1);
+
+  // ── LEFT PANEL — header area ──
+  ctx.fillStyle = BORDER;
+  ctx.fillRect(0, MONTHS_H - 1, leftW, 1); // fake months/days split
+
+  // ── LEFT PANEL — task rows ──
+  rows.forEach(({ task, depth, isParent }, i) => {
+    const ry = HEADER_H + i * ROW_H;
+    if (isParent) {
+      ctx.fillStyle = 'rgba(255,255,255,0.02)';
+      ctx.fillRect(0, ry, leftW, ROW_H);
+    }
+    ctx.fillStyle = BORDER;
+    ctx.fillRect(0, ry + ROW_H - 1, leftW, 1);
+
+    const dotCenterX = 8 + depth * 16 + 16 + 6 + 4;
+    ctx.fillStyle = hueToColor(task.color);
+    ctx.beginPath();
+    ctx.arc(dotCenterX, ry + ROW_H / 2, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    const labelX = dotCenterX + 4 + 6;
+    const maxLabelW = leftW - labelX - 8;
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = isParent ? TEXT : TEXT2;
+    ctx.font = (isParent ? '600 ' : '') + '12.5px DM Sans, sans-serif';
+    let name = task.TaskName;
+    while (name.length > 1 && ctx.measureText(name).width > maxLabelW) name = name.slice(0, -1);
+    if (name !== task.TaskName) name = name.slice(0, -1) + '\u2026';
+    ctx.fillText(name, labelX, ry + ROW_H / 2);
+  });
+
+  // ── TIME HEADER — months row ──
+  let curMonth = -1, curYear = -1, monthSpan = 0, monthStartDay = 0;
+  const drawMonthCell = (mIdx, yr, startDay, span) => {
+    const cx = gx + startDay * dayW;
+    const cw = span * dayW;
+    ctx.fillStyle = BORDER;
+    ctx.fillRect(cx + cw - 1, 0, 1, MONTHS_H);
+    ctx.fillStyle = TEXT2;
+    ctx.font = '500 11px DM Mono, monospace';
+    ctx.textBaseline = 'middle';
+    ctx.fillText((MONTHS[mIdx] + ' ' + yr).toUpperCase(), cx + 10, MONTHS_H / 2);
+  };
+  for (let i = 0; i <= days; i++) {
+    const d = addDays(minDate, i);
+    const m = d.getMonth(), y = d.getFullYear();
+    if (m !== curMonth || y !== curYear) {
+      if (curMonth >= 0) drawMonthCell(curMonth, curYear, monthStartDay, monthSpan);
+      curMonth = m; curYear = y; monthSpan = 0; monthStartDay = i;
+    }
+    monthSpan++;
+  }
+  if (monthSpan > 0) drawMonthCell(curMonth, curYear, monthStartDay, monthSpan);
+
+  // ── TIME HEADER — months/days separator ──
+  ctx.fillStyle = BORDER;
+  ctx.fillRect(gx, MONTHS_H - 1, ganttW, 1);
+
+  // ── TIME HEADER — days/weeks row ──
+  if (dayW < 14) {
+    let i = 0;
+    while (i < days) {
+      const d = addDays(minDate, i);
+      const dow = d.getDay();
+      const span = Math.min(7 - dow, days - i);
+      const cellW = span * dayW;
+      const cellX = gx + i * dayW;
+      let weekHasToday = false;
+      for (let j = 0; j < span; j++) {
+        if (addDays(minDate, i + j).getTime() === today.getTime()) { weekHasToday = true; break; }
+      }
+      if (weekHasToday) {
+        ctx.fillStyle = 'rgba(79,142,247,0.12)';
+        ctx.fillRect(cellX, MONTHS_H, cellW, DAYS_H);
+      }
+      ctx.fillStyle = BORDER;
+      ctx.fillRect(cellX + cellW - 1, MONTHS_H, 1, DAYS_H);
+      const labelDay = dow === 0 ? addDays(d, 1) : d;
+      const lbl = MONTHS[labelDay.getMonth()] + ' ' + labelDay.getDate();
+      ctx.fillStyle = weekHasToday ? ACCENT : TEXT3;
+      ctx.font = '9px DM Mono, monospace';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(lbl, cellX + cellW / 2 - ctx.measureText(lbl).width / 2, MONTHS_H + DAYS_H / 2);
+      i += span;
+    }
+  } else {
+    for (let i = 0; i < days; i++) {
+      const d = addDays(minDate, i);
+      const dow = d.getDay();
+      const isWeekend = dow === 0 || dow === 6;
+      const isToday = d.getTime() === today.getTime();
+      const cellX = gx + i * dayW;
+      if (isWeekend) {
+        ctx.fillStyle = 'rgba(255,255,255,0.015)';
+        ctx.fillRect(cellX, MONTHS_H, dayW, DAYS_H);
+      }
+      if (isToday) {
+        ctx.fillStyle = 'rgba(79,142,247,0.12)';
+        ctx.fillRect(cellX, MONTHS_H, dayW, DAYS_H);
+      }
+      ctx.fillStyle = BORDER;
+      ctx.fillRect(cellX + dayW - 1, MONTHS_H, 1, DAYS_H);
+      ctx.textBaseline = 'middle';
+      ctx.font = '9px DM Mono, monospace';
+      ctx.fillStyle = isToday ? ACCENT : TEXT3;
+      const dowStr = DAYS[dow];
+      ctx.fillText(dowStr, cellX + dayW / 2 - ctx.measureText(dowStr).width / 2, MONTHS_H + DAYS_H * 0.32);
+      ctx.font = (isToday ? '600 ' : '') + '10px DM Mono, monospace';
+      const dateStr = String(d.getDate());
+      ctx.fillText(dateStr, cellX + dayW / 2 - ctx.measureText(dateStr).width / 2, MONTHS_H + DAYS_H * 0.72);
+    }
+  }
+
+  // ── GANTT ROWS ──
+  const totalRowH = rows.length * ROW_H;
+
+  // Weekend backgrounds
+  if (dayW < 14) {
+    let i = 0;
+    while (i < days) {
+      const d = addDays(minDate, i);
+      const dow = d.getDay();
+      const span = Math.min(7 - dow, days - i);
+      const satOffset = (6 - dow + 7) % 7;
+      if (satOffset < span) {
+        ctx.fillStyle = 'rgba(255,255,255,0.05)';
+        ctx.fillRect(gx + (i + satOffset) * dayW, HEADER_H, Math.min(2, span - satOffset) * dayW, totalRowH);
+      }
+      i += span;
+    }
+  } else {
+    for (let i = 0; i < days; i++) {
+      if ([0, 6].includes(addDays(minDate, i).getDay())) {
+        ctx.fillStyle = 'rgba(255,255,255,0.05)';
+        ctx.fillRect(gx + i * dayW, HEADER_H, dayW, totalRowH);
+      }
+    }
+  }
+
+  // Today line
+  const todayX = dateToX(new Date());
+  if (todayX >= 0 && todayX <= ganttW) {
+    ctx.fillStyle = ACCENT;
+    ctx.globalAlpha = 0.5;
+    ctx.fillRect(gx + todayX, HEADER_H, 2, totalRowH);
+    ctx.globalAlpha = 1;
+  }
+
+  // Grid lines
+  if (dayW < 14) {
+    let i = 0;
+    while (i <= days) {
+      const d = addDays(minDate, i);
+      const dow = d.getDay();
+      const span = Math.min(7 - dow, days - i);
+      ctx.fillStyle = BORDER;
+      ctx.fillRect(gx + i * dayW, HEADER_H, 1, totalRowH);
+      i += span || 1;
+    }
+  } else {
+    for (let i = 0; i <= days; i++) {
+      ctx.fillStyle = BORDER;
+      ctx.fillRect(gx + i * dayW, HEADER_H, 1, totalRowH);
+    }
+  }
+
+  // Task rows + bars
+  rows.forEach(({ task, depth, isParent }, rowIdx) => {
+    const ry = HEADER_H + rowIdx * ROW_H;
+    if (isParent) {
+      ctx.fillStyle = 'rgba(255,255,255,0.01)';
+      ctx.fillRect(gx, ry, ganttW, ROW_H);
+    }
+    ctx.fillStyle = BORDER;
+    ctx.fillRect(gx, ry + ROW_H - 1, ganttW, 1);
+
+    if (task.StartDate && task.EndDate) {
+      const x = dateToX(task.StartDate);
+      const minBarW = dayW < 14 ? dayW * 7 : dayW;
+      const barW = Math.max(dateToX(task.EndDate) - x, minBarW);
+      const barH = isParent ? 8 : 22;
+      const barX = gx + x;
+      const barY = ry + (ROW_H - barH) / 2;
+
+      if (isParent) {
+        ctx.fillStyle = TEXT3;
+        ctx.beginPath();
+        ctx.roundRect(barX, barY, barW, barH, 2);
+        ctx.fill();
+      } else {
+        const color = hueToColor(task.color);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.roundRect(barX, barY, barW, barH, 4);
+        ctx.fill();
+
+        const prog = task.Progress || 0;
+        if (prog > 0) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(barX, barY, barW, barH, 4);
+          ctx.clip();
+          ctx.fillStyle = 'rgba(255,255,255,0.25)';
+          ctx.fillRect(barX, barY, Math.min(prog / 100, 1) * barW, barH);
+          ctx.restore();
+        }
+
+        ctx.fillStyle = '#fff';
+        ctx.font = '500 11px DM Sans, sans-serif';
+        ctx.textBaseline = 'middle';
+        let lbl = task.TaskName;
+        const maxLW = barW - 16;
+        while (lbl.length > 1 && ctx.measureText(lbl).width > maxLW) lbl = lbl.slice(0, -1);
+        if (lbl !== task.TaskName) lbl = lbl.slice(0, -1) + '\u2026';
+        if (ctx.measureText(lbl).width <= maxLW) ctx.fillText(lbl, barX + 8, barY + barH / 2);
+      }
+    }
+  });
+
   const a = document.createElement('a');
-  a.href = canvas.toDataURL();
+  a.href = canvas.toDataURL('image/png');
   a.download = (document.getElementById('project-name').value || 'gantt') + '.png';
   a.click();
 }

@@ -992,7 +992,10 @@ function renderGantt() {
       bar.style.top = '50%';
       bar.style.transform = 'translateY(-50%)';
 
-      if (!isParent) {
+      if (isParent) {
+        // Drag parent bar — shifts all subtasks with it
+        bar.addEventListener('mousedown', e => startDrag(e, task));
+      } else {
         const color = hueToColor(task.color);
         bar.style.background = color;
         bar.style.boxShadow = `0 1px 4px ${color}44`;
@@ -1161,20 +1164,42 @@ function startDrag(e, task) {
   const origStart = new Date(task.StartDate);
   const origEnd = new Date(task.EndDate);
   const dur = diffDays(origStart, origEnd);
+  const minBarW = dayW < 14 ? dayW * 7 : dayW;
+
+  // Snapshot subtask original dates (for parent-drag bulk shift)
+  const subtasks = task.subtasks || [];
+  const origSubDates = subtasks.map(s => ({
+    task: s,
+    start: new Date(s.StartDate),
+    end: new Date(s.EndDate),
+    dur: diffDays(new Date(s.StartDate), new Date(s.EndDate)),
+  }));
 
   function onMove(e) {
     const dx = e.clientX - startX;
     const daysDelta = Math.round(dx / dayW);
-    const newStart = addDays(origStart, daysDelta);
-    const newEnd = addDays(origEnd, daysDelta);
-    task.StartDate = toDateStr(newStart);
-    task.EndDate = toDateStr(newEnd);
-    task.Duration = dur;
 
+    task.StartDate = toDateStr(addDays(origStart, daysDelta));
+    task.EndDate = toDateStr(addDays(origEnd, daysDelta));
+    task.Duration = dur;
     const x = dateToX(task.StartDate);
     const w = dateToX(task.EndDate) - x;
     bar.style.left = x + 'px';
-    bar.style.width = Math.max(w, dayW < 14 ? dayW * 7 : dayW) + 'px';
+    bar.style.width = Math.max(w, minBarW) + 'px';
+
+    // Shift subtasks and update their bars live
+    origSubDates.forEach(({ task: sub, start, end, dur: sd }) => {
+      sub.StartDate = toDateStr(addDays(start, daysDelta));
+      sub.EndDate = toDateStr(addDays(end, daysDelta));
+      sub.Duration = sd;
+      const subBar = document.querySelector(`.gantt-row[data-id="${sub.TaskID}"] .task-bar`);
+      if (subBar) {
+        const sx = dateToX(sub.StartDate);
+        const sw = dateToX(sub.EndDate) - sx;
+        subBar.style.left = sx + 'px';
+        subBar.style.width = Math.max(sw, minBarW) + 'px';
+      }
+    });
   }
 
   function onUp() {

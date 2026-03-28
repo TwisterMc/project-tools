@@ -480,6 +480,27 @@
   .bar-tooltip strong { display: block; margin-bottom: 4px; }
   .bar-tooltip .tip-dates { color: var(--text2); font-family: ui-monospace, monospace; font-size: 11px; }
 
+  /* CONFIRM DIALOG */
+  #confirm-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1100;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+  }
+  #confirm-overlay.open { display: flex; }
+  #confirm-box {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: 20px 24px;
+    width: 320px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  }
+  #confirm-box p { font-size: 13px; color: var(--text2); margin-bottom: 16px; line-height: 1.5; }
+
   /* FOCUS VISIBLE - keyboard nav only */
   :focus:not(:focus-visible) { outline: none; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -627,6 +648,17 @@
   <div id="tip-progress" style="margin-top:4px;color:var(--green);font-size:11px;"></div>
 </div>
 
+<!-- CONFIRM DIALOG -->
+<div id="confirm-overlay">
+  <div id="confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="confirm-msg">
+    <p id="confirm-msg"></p>
+    <div class="modal-actions">
+      <button class="btn" id="confirm-cancel-btn" onclick="confirmCancel()">Cancel</button>
+      <button class="btn danger" id="confirm-ok-btn" onclick="confirmOk()">Delete</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast" role="alert" aria-live="assertive" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--red);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:2000;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.4);"></div>
 
@@ -646,6 +678,48 @@ let editingId = null;
 let dayW = 20;
 let minDate = null, maxDate = null;
 let dragState = null;
+
+// ─── HISTORY (UNDO/REDO) ─────────────────────────────────────────────────────
+const _history = [];
+const _future = [];
+const MAX_HISTORY = 50;
+function pushHistory() {
+  _history.push(JSON.parse(JSON.stringify(state.data)));
+  if (_history.length > MAX_HISTORY) _history.shift();
+  _future.length = 0; // new action clears redo stack
+}
+function undo() {
+  if (!_history.length) return;
+  _future.push(JSON.parse(JSON.stringify(state.data)));
+  state.data = _history.pop();
+  renderAll();
+  showToast('Undone', 1500, 'info');
+}
+function redo() {
+  if (!_future.length) return;
+  _history.push(JSON.parse(JSON.stringify(state.data)));
+  state.data = _future.pop();
+  renderAll();
+  showToast('Redone', 1500, 'info');
+}
+
+// ─── CONFIRM DIALOG ───────────────────────────────────────────────────────────
+let _confirmOkCallback = null;
+function showConfirm(msg, onOk) {
+  _confirmOkCallback = onOk;
+  document.getElementById('confirm-msg').textContent = msg;
+  document.getElementById('confirm-overlay').classList.add('open');
+  document.getElementById('confirm-cancel-btn').focus();
+}
+function confirmCancel() {
+  document.getElementById('confirm-overlay').classList.remove('open');
+  _confirmOkCallback = null;
+}
+function confirmOk() {
+  document.getElementById('confirm-overlay').classList.remove('open');
+  if (_confirmOkCallback) _confirmOkCallback();
+  _confirmOkCallback = null;
+}
 
 // ─── COLORS ──────────────────────────────────────────────────────────────────
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -1161,6 +1235,7 @@ function startDrag(e, task) {
   e.preventDefault();
   e.stopPropagation();
   hideTooltip();
+  pushHistory();
   const bar = e.currentTarget;
   bar.classList.add('dragging');
   const startX = e.clientX;
@@ -1219,6 +1294,7 @@ function startDrag(e, task) {
 function startResize(e, task, side) {
   e.preventDefault();
   e.stopPropagation();
+  pushHistory();
   const bar = e.currentTarget.parentElement;
   const startX = e.clientX;
   const origStart = parseDate(task.StartDate);
@@ -1358,6 +1434,7 @@ function closeModal(e) {
 function saveTask() {
   const name = document.getElementById('f-name').value.trim();
   if (!name) { document.getElementById('f-name').focus(); return; }
+  pushHistory();
 
   const start = document.getElementById('f-start').value;
   const end = document.getElementById('f-end').value;
@@ -1425,13 +1502,18 @@ function saveTask() {
 }
 
 function deleteTask(id, parentId) {
-  if (parentId) {
-    const parent = state.data.find(t => t.TaskID === parentId);
-    if (parent) parent.subtasks = parent.subtasks.filter(s => s.TaskID !== id);
-  } else {
-    state.data = state.data.filter(t => t.TaskID !== id);
-  }
-  renderAll();
+  const task = findTask(id);
+  const label = task ? task.TaskName : 'this task';
+  showConfirm(`Delete "${label}"?`, () => {
+    pushHistory();
+    if (parentId) {
+      const parent = state.data.find(t => t.TaskID === parentId);
+      if (parent) parent.subtasks = parent.subtasks.filter(s => s.TaskID !== id);
+    } else {
+      state.data = state.data.filter(t => t.TaskID !== id);
+    }
+    renderAll();
+  });
 }
 
 // ─── FILE OPS ─────────────────────────────────────────────────────────────────
@@ -1861,7 +1943,12 @@ document.getElementById('modal').addEventListener('keydown', e => {
 });
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') document.getElementById('modal-overlay').classList.remove('open');
+  if (e.key === 'Escape') {
+    document.getElementById('modal-overlay').classList.remove('open');
+    confirmCancel();
+  }
+  if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
   if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); showToast('Auto-saved in browser. Use Export .gantt to save a file.', 3000, 'info'); }
   if ((e.metaKey || e.ctrlKey) && e.key === 'o') { e.preventDefault(); openFile(); }
   if ((e.metaKey || e.ctrlKey) && e.key === 'n' && !document.getElementById('modal-overlay').classList.contains('open')) {

@@ -863,7 +863,7 @@ function computeDateRange() {
 }
 
 function dateToX(d) {
-  return diffDays(minDate, startOfDay(new Date(d))) * dayW;
+  return diffDays(minDate, startOfDay(parseDate(d))) * dayW;
 }
 
 function totalWidth() {
@@ -1240,8 +1240,8 @@ function startDrag(e, task) {
   const bar = e.currentTarget;
   bar.classList.add('dragging');
   const startX = e.clientX;
-  const origStart = new Date(task.StartDate);
-  const origEnd = new Date(task.EndDate);
+  const origStart = parseDate(task.StartDate);
+  const origEnd = parseDate(task.EndDate);
   const dur = diffDays(origStart, origEnd);
   const minBarW = dayW < 14 ? dayW * 7 : dayW;
 
@@ -1249,9 +1249,9 @@ function startDrag(e, task) {
   const subtasks = task.subtasks || [];
   const origSubDates = subtasks.map(s => ({
     task: s,
-    start: new Date(s.StartDate),
-    end: new Date(s.EndDate),
-    dur: diffDays(new Date(s.StartDate), new Date(s.EndDate)),
+    start: parseDate(s.StartDate),
+    end: parseDate(s.EndDate),
+    dur: diffDays(parseDate(s.StartDate), parseDate(s.EndDate)),
   }));
 
   function onMove(e) {

@@ -1880,7 +1880,26 @@ async function dbGet(key) {
 }
 
 // ─── RENDER ALL ──────────────────────────────────────────────────────────────
+function syncParentDates() {
+  state.data.forEach(t => {
+    if (!t.subtasks || !t.subtasks.length) return;
+    const starts = t.subtasks.map(s => parseDate(s.StartDate)).filter(Boolean);
+    const ends   = t.subtasks.map(s => parseDate(s.EndDate)).filter(Boolean);
+    if (!starts.length) return;
+    const minSubStart = starts.reduce((a, b) => a < b ? a : b);
+    const maxSubEnd   = ends.reduce((a, b) => a > b ? a : b);
+    const parentStart = parseDate(t.StartDate);
+    const parentEnd   = parseDate(t.EndDate);
+    // Parent may start before subtasks but not after
+    if (!parentStart || parentStart > minSubStart) t.StartDate = toDateStr(minSubStart);
+    // Parent may end after subtasks but not before
+    if (!parentEnd || parentEnd < maxSubEnd) t.EndDate = toDateStr(maxSubEnd);
+    t.Duration = diffDays(t.StartDate, t.EndDate);
+  });
+}
+
 function renderAll() {
+  syncParentDates();
   renderLeft();
   renderGantt();
   dbSet('state', state);

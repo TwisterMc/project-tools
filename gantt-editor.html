@@ -444,6 +444,9 @@
     cursor: pointer;
     border: 2px solid transparent;
     transition: border-color 0.1s, transform 0.1s;
+    padding: 0;
+    appearance: none;
+    -webkit-appearance: none;
   }
   .swatch:hover { transform: scale(1.15); }
   .swatch.active { border-color: #fff; }
@@ -705,8 +708,11 @@ function redo() {
 }
 
 // ─── CONFIRM DIALOG ───────────────────────────────────────────────────────────
+let _modalReturnEl = null, _modalReturnId = null;
+let _confirmReturnEl = null;
 let _confirmOkCallback = null;
 function showConfirm(msg, onOk) {
+  _confirmReturnEl = document.activeElement;
   _confirmOkCallback = onOk;
   document.getElementById('confirm-msg').textContent = msg;
   document.getElementById('confirm-overlay').classList.add('open');
@@ -715,11 +721,19 @@ function showConfirm(msg, onOk) {
 function confirmCancel() {
   document.getElementById('confirm-overlay').classList.remove('open');
   _confirmOkCallback = null;
+  _confirmReturnEl?.focus();
+  _confirmReturnEl = null;
 }
 function confirmOk() {
   document.getElementById('confirm-overlay').classList.remove('open');
-  if (_confirmOkCallback) _confirmOkCallback();
+  const cb = _confirmOkCallback;
   _confirmOkCallback = null;
+  _confirmReturnEl = null;
+  if (cb) cb();
+  const firstRow = document.querySelector('.task-row');
+  const addBtn = document.querySelector('#left-footer .btn');
+  if (firstRow) firstRow.focus();
+  else if (addBtn) addBtn.focus();
 }
 
 // ─── COLORS ──────────────────────────────────────────────────────────────────
@@ -751,16 +765,44 @@ let selectedColorHue = 210;
 function buildColorSwatches() {
   const el = document.getElementById('color-swatches');
   el.innerHTML = '';
-  PALETTE.forEach(p => {
-    const s = document.createElement('div');
+
+  function selectSwatch(hue) {
+    selectedColorHue = hue;
+    el.querySelectorAll('.swatch').forEach(x => {
+      const active = parseInt(x.dataset.hue, 10) === hue;
+      x.classList.toggle('active', active);
+      x.setAttribute('aria-checked', String(active));
+      x.tabIndex = active ? 0 : -1;
+    });
+  }
+
+  PALETTE.forEach((p, idx) => {
+    const s = document.createElement('button');
+    s.type = 'button';
     s.className = 'swatch' + (p.hue === selectedColorHue ? ' active' : '');
     s.style.background = p.color;
     s.title = p.label;
-    s.onclick = () => {
-      selectedColorHue = p.hue;
-      document.querySelectorAll('.swatch').forEach(x => x.classList.remove('active'));
-      s.classList.add('active');
-    };
+    s.setAttribute('role', 'radio');
+    s.setAttribute('aria-label', p.label);
+    s.setAttribute('aria-checked', String(p.hue === selectedColorHue));
+    s.dataset.hue = p.hue;
+    s.tabIndex = p.hue === selectedColorHue ? 0 : -1;
+    s.onclick = () => selectSwatch(p.hue);
+    s.addEventListener('keydown', ev => {
+      const swatches = Array.from(el.querySelectorAll('.swatch'));
+      const cur = swatches.indexOf(ev.currentTarget);
+      if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') {
+        ev.preventDefault();
+        const next = (cur + 1) % swatches.length;
+        selectSwatch(parseInt(swatches[next].dataset.hue, 10));
+        swatches[next].focus();
+      } else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') {
+        ev.preventDefault();
+        const prev = (cur - 1 + swatches.length) % swatches.length;
+        selectSwatch(parseInt(swatches[prev].dataset.hue, 10));
+        swatches[prev].focus();
+      }
+    });
     el.appendChild(s);
   });
 }
@@ -995,15 +1037,29 @@ function renderGantt() {
       i += span;
     }
   } else {
-    for (let i = 0; i < days; i++) {
+    // Day-mode: merge Sat+Sun into one div per weekend (~52 instead of ~104 DOM nodes)
+    let i = 0;
+    while (i < days) {
       const dow = addDays(minDate, i).getDay();
-      if (dow === 0 || dow === 6) {
+      if (dow === 6) {
+        const spanW = (i + 1 < days) ? 2 : 1;
+        const wb = document.createElement('div');
+        wb.className = 'weekend-bg';
+        wb.style.left = (i * dayW) + 'px';
+        wb.style.width = (spanW * dayW) + 'px';
+        wb.style.height = totalH + 'px';
+        ganttRows.appendChild(wb);
+        i += spanW;
+      } else if (dow === 0) {
         const wb = document.createElement('div');
         wb.className = 'weekend-bg';
         wb.style.left = (i * dayW) + 'px';
         wb.style.width = dayW + 'px';
         wb.style.height = totalH + 'px';
         ganttRows.appendChild(wb);
+        i++;
+      } else {
+        i++;
       }
     }
   }
@@ -1019,6 +1075,7 @@ function renderGantt() {
   }
 
   // Grid lines — drawn once on the container (O(days) not O(tasks×days))
+  ganttRows.style.backgroundImage = '';
   if (dayW < 14) {
     let i = 0;
     while (i < days) {
@@ -1036,16 +1093,9 @@ function renderGantt() {
     glEnd.style.left = (days * dayW) + 'px';
     ganttRows.appendChild(glEnd);
   } else {
-    for (let i = 0; i < days; i++) {
-      const gl = document.createElement('div');
-      gl.className = 'grid-line';
-      gl.style.left = (i * dayW) + 'px';
-      ganttRows.appendChild(gl);
-    }
-    const glEnd = document.createElement('div');
-    glEnd.className = 'grid-line';
-    glEnd.style.left = (days * dayW) + 'px';
-    ganttRows.appendChild(glEnd);
+    // Day-mode: CSS repeating gradient replaces ~365 individual DOM divs
+    ganttRows.style.backgroundImage =
+      `repeating-linear-gradient(to right, var(--border) 0px, var(--border) 1px, transparent 1px, transparent ${dayW}px)`;
   }
 
   rows.forEach(({ task, depth, isParent }) => {
@@ -1069,7 +1119,7 @@ function renderGantt() {
 
       if (isParent) {
         // Drag parent bar — shifts all subtasks with it
-        bar.addEventListener('mousedown', e => startDrag(e, task));
+        bar.addEventListener('pointerdown', e => startDrag(e, task));
         bar.addEventListener('mouseenter', e => showTooltip(e, task));
         bar.addEventListener('mousemove', e => moveTooltip(e));
         bar.addEventListener('mouseleave', hideTooltip);
@@ -1096,16 +1146,16 @@ function renderGantt() {
         // Resize handles
         const rl = document.createElement('div');
         rl.className = 'resize-handle left';
-        rl.addEventListener('mousedown', e => startResize(e, task, 'left'));
+        rl.addEventListener('pointerdown', e => startResize(e, task, 'left'));
         bar.appendChild(rl);
 
         const rr = document.createElement('div');
         rr.className = 'resize-handle right';
-        rr.addEventListener('mousedown', e => startResize(e, task, 'right'));
+        rr.addEventListener('pointerdown', e => startResize(e, task, 'right'));
         bar.appendChild(rr);
 
         // Drag
-        bar.addEventListener('mousedown', e => startDrag(e, task));
+        bar.addEventListener('pointerdown', e => startDrag(e, task));
 
         // Tooltip
         bar.addEventListener('mouseenter', e => showTooltip(e, task));
@@ -1252,6 +1302,7 @@ function startDrag(e, task) {
     start: parseDate(s.StartDate),
     end: parseDate(s.EndDate),
     dur: diffDays(parseDate(s.StartDate), parseDate(s.EndDate)),
+    bar: document.querySelector(`.gantt-row[data-id="${s.TaskID}"] .task-bar`),
   }));
 
   function onMove(e) {
@@ -1267,11 +1318,10 @@ function startDrag(e, task) {
     bar.style.width = Math.max(w, minBarW) + 'px';
 
     // Shift subtasks and update their bars live
-    origSubDates.forEach(({ task: sub, start, end, dur: sd }) => {
+    origSubDates.forEach(({ task: sub, start, end, dur: sd, bar: subBar }) => {
       sub.StartDate = toDateStr(addDays(start, daysDelta));
       sub.EndDate = toDateStr(addDays(end, daysDelta));
       sub.Duration = sd;
-      const subBar = document.querySelector(`.gantt-row[data-id="${sub.TaskID}"] .task-bar`);
       if (subBar) {
         const sx = dateToX(sub.StartDate);
         const sw = dateToX(sub.EndDate) - sx;
@@ -1283,13 +1333,16 @@ function startDrag(e, task) {
 
   function onUp() {
     bar.classList.remove('dragging');
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
+    bar.removeEventListener('pointermove', onMove);
+    bar.removeEventListener('pointerup', onUp);
+    bar.removeEventListener('pointercancel', onUp);
     renderAll();
   }
 
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
+  bar.setPointerCapture(e.pointerId);
+  bar.addEventListener('pointermove', onMove);
+  bar.addEventListener('pointerup', onUp);
+  bar.addEventListener('pointercancel', onUp);
 }
 
 function startResize(e, task, side) {
@@ -1322,8 +1375,9 @@ function startResize(e, task, side) {
   }
 
   function onUp(e) {
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
+    bar.removeEventListener('pointermove', onMove);
+    bar.removeEventListener('pointerup', onUp);
+    bar.removeEventListener('pointercancel', onUp);
     const dx = e.clientX - startX;
     const daysDelta = Math.round(dx / dayW);
     if (side === 'left') {
@@ -1342,8 +1396,10 @@ function startResize(e, task, side) {
     renderAll();
   }
 
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
+  bar.setPointerCapture(e.pointerId);
+  bar.addEventListener('pointermove', onMove);
+  bar.addEventListener('pointerup', onUp);
+  bar.addEventListener('pointercancel', onUp);
 }
 
 // ─── TOOLTIP ─────────────────────────────────────────────────────────────────
@@ -1375,6 +1431,8 @@ function toggleCollapse(id) {
 
 // ─── MODAL ───────────────────────────────────────────────────────────────────
 function openAddTask(parentId) {
+  _modalReturnEl = document.activeElement;
+  _modalReturnId = parentId ? String(parentId) : 'add-btn';
   editingId = null;
   document.getElementById('modal-title').textContent = parentId ? 'Add Subtask' : 'Add Task';
   document.getElementById('f-name').value = '';
@@ -1393,6 +1451,8 @@ function openAddTask(parentId) {
 function openEditTask(id) {
   const task = findTask(id);
   if (!task) return;
+  _modalReturnEl = document.activeElement;
+  _modalReturnId = String(id);
   editingId = id;
   document.getElementById('modal-title').textContent = 'Edit Task';
   document.getElementById('f-name').value = task.TaskName;
@@ -1430,6 +1490,9 @@ function buildParentSelect(selectedParentId) {
 function closeModal(e) {
   if (e && e.target !== document.getElementById('modal-overlay')) return;
   document.getElementById('modal-overlay').classList.remove('open');
+  _modalReturnEl?.focus();
+  _modalReturnEl = null;
+  _modalReturnId = null;
 }
 
 function saveTask() {
@@ -1500,6 +1563,13 @@ function saveTask() {
 
   document.getElementById('modal-overlay').classList.remove('open');
   renderAll();
+  if (_modalReturnId && _modalReturnId !== 'add-btn') {
+    document.querySelector(`.task-row[data-id="${_modalReturnId}"]`)?.focus();
+  } else {
+    document.querySelector('#left-footer .btn')?.focus();
+  }
+  _modalReturnEl = null;
+  _modalReturnId = null;
 }
 
 function deleteTask(id, parentId) {
@@ -1535,6 +1605,7 @@ function openFile() {
 function loadFile(e) {
   const file = e.target.files[0];
   if (!file) return;
+  e.target.value = '';
   const reader = new FileReader();
   reader.onload = ev => {
     try {
@@ -1553,7 +1624,6 @@ function loadFile(e) {
     }
   };
   reader.readAsText(file);
-  e.target.value = '';
 }
 
 function saveFile() {
@@ -1898,16 +1968,23 @@ function syncParentDates() {
   });
 }
 
+function debounce(fn, ms) {
+  let timer;
+  return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
+}
+const _dbSaveState = debounce(s => dbSet('state', s), 500);
+const _dbSaveName  = debounce(n => dbSet('name', n), 500);
+
 function renderAll() {
   syncParentDates();
   renderLeft();
   renderGantt();
-  dbSet('state', state);
-  dbSet('name', document.getElementById('project-name').value);
+  _dbSaveState(state);
+  _dbSaveName(document.getElementById('project-name').value);
 }
 
 // ─── PANEL RESIZE ────────────────────────────────────────────────────────────
-document.getElementById('panel-resize').addEventListener('mousedown', e => {
+document.getElementById('panel-resize').addEventListener('pointerdown', e => {
   e.preventDefault();
   const handle = e.currentTarget;
   const panel = document.getElementById('left-panel');
@@ -1922,16 +1999,19 @@ document.getElementById('panel-resize').addEventListener('mousedown', e => {
 
   function onUp() {
     handle.classList.remove('dragging');
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
+    handle.removeEventListener('pointermove', onMove);
+    handle.removeEventListener('pointerup', onUp);
+    handle.removeEventListener('pointercancel', onUp);
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
   }
 
+  handle.setPointerCapture(e.pointerId);
   document.body.style.cursor = 'col-resize';
   document.body.style.userSelect = 'none';
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
+  handle.addEventListener('pointermove', onMove);
+  handle.addEventListener('pointerup', onUp);
+  handle.addEventListener('pointercancel', onUp);
 });
 
 document.getElementById('panel-resize').addEventListener('keydown', e => {
@@ -1964,7 +2044,7 @@ document.getElementById('modal').addEventListener('keydown', e => {
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    document.getElementById('modal-overlay').classList.remove('open');
+    closeModal();
     confirmCancel();
   }
   if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }

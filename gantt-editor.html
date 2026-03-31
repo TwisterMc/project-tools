@@ -96,6 +96,11 @@
   .btn:hover { background: var(--border); border-color: var(--border2); }
   .btn.primary { background: var(--accent); border-color: var(--accent2); color: #fff; }
   .btn.primary:hover { background: var(--accent2); }
+  @keyframes export-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(79,142,247,0.6); }
+    50% { box-shadow: 0 0 0 6px rgba(79,142,247,0); }
+  }
+  .btn.export-stale { animation: export-pulse 2.5s ease-in-out infinite; }
   .btn.danger:hover { background: #3a1a1a; border-color: var(--red); color: var(--red); }
 
   .spacer { flex: 1; }
@@ -585,7 +590,7 @@
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
     Open .gantt
   </button>
-  <button class="btn primary" onclick="saveFile()">
+  <button id="export-btn" class="btn primary" onclick="saveFile()">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
     Export .gantt
   </button>
@@ -699,6 +704,17 @@
     <div class="modal-actions">
       <button class="btn" id="confirm-cancel-btn" onclick="confirmCancel()">Cancel</button>
       <button class="btn danger" id="confirm-ok-btn" onclick="confirmOk()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXPORT WARNING -->
+<div id="export-warn-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1500;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px);">
+  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:24px;width:320px;box-shadow:0 16px 48px rgba(0,0,0,0.5);">
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.5;" id="export-warn-msg"></p>
+    <div class="modal-actions">
+      <button class="btn" onclick="document.getElementById('export-warn-overlay').style.display='none'">Dismiss</button>
+      <button class="btn primary" onclick="document.getElementById('export-warn-overlay').style.display='none';saveFile()">Export Now</button>
     </div>
   </div>
 </div>
@@ -1830,6 +1846,32 @@ function saveFile() {
   a.download = name + '.gantt';
   a.click();
   URL.revokeObjectURL(url);
+  const now = new Date().toISOString();
+  dbSet('lastExport', now);
+  updateLastExportLabel(now);
+}
+
+function updateLastExportLabel(iso) {
+  const btn = document.getElementById('export-btn');
+  if (!btn) return;
+  btn.classList.remove('export-stale');
+  if (!iso) return;
+  const d = new Date(iso);
+  const fmt = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+            + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  btn.title = 'Last exported ' + fmt;
+  const hoursAgo = (Date.now() - d.getTime()) / 36e5;
+  if (hoursAgo > 24) btn.classList.add('export-stale');
+  if (hoursAgo > 48) {
+    document.getElementById('export-warn-msg').textContent =
+      'Your project hasn\'t been exported in over 2 days (last exported ' + fmt + '). Consider saving a copy.';
+    document.getElementById('export-warn-overlay').style.display = 'flex';
+  }
+}
+
+async function checkExportStaleness() {
+  const iso = await dbGet('lastExport');
+  updateLastExportLabel(iso);
 }
 
 function exportPNG() {
@@ -2293,6 +2335,9 @@ document.getElementById('f-end').addEventListener('change', function() {
     if (name) document.getElementById('project-name').value = name;
     collapsed.clear();
   }
+  const lastExport = await dbGet('lastExport');
+  updateLastExportLabel(lastExport);
+  setInterval(checkExportStaleness, 4 * 60 * 60 * 1000); // check every 4 hours
   renderAll();
 })();
 </script>

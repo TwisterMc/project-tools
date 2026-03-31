@@ -696,7 +696,6 @@ let collapsed = new Set();
 let editingId = null;
 let dayW = 20;
 let minDate = null, maxDate = null;
-let dragState = null;
 
 // ─── HISTORY (UNDO/REDO) ─────────────────────────────────────────────────────
 const _history = [];
@@ -888,8 +887,8 @@ function nextId() {
 }
 
 // ─── DATE RANGE ──────────────────────────────────────────────────────────────
-function computeDateRange(all) {
-  const tasks = all;
+function computeDateRange() {
+  const tasks = allTasks();
   if (!tasks.length) {
     minDate = startOfDay(new Date());
     maxDate = addDays(minDate, 60);
@@ -924,6 +923,10 @@ function dateToX(d) {
 
 function totalWidth() {
   return diffDays(minDate, maxDate) * dayW + (dayW < 14 ? 0 : 200);
+}
+
+function minBarW() {
+  return dayW < 14 ? dayW * 7 : dayW;
 }
 
 // ─── RENDER LEFT ─────────────────────────────────────────────────────────────
@@ -1018,7 +1021,7 @@ function renderLeft(all) {
 
 // ─── RENDER GANTT ─────────────────────────────────────────────────────────────
 function renderGantt(all) {
-  computeDateRange(all);
+  computeDateRange();
   const tw = totalWidth();
   const rows = flatTasks();
 
@@ -1124,13 +1127,11 @@ function renderGantt(all) {
     // Task bar
     if (task.StartDate && task.EndDate) {
       const x = dateToX(task.StartDate);
-      const w = Math.max(dateToX(task.EndDate) + dayW - x, dayW < 14 ? dayW * 7 : dayW);
-
-      const minBarW = dayW < 14 ? dayW * 7 : dayW;
+      const w = Math.max(dateToX(task.EndDate) + dayW - x, minBarW());
       const bar = document.createElement('div');
       bar.className = 'task-bar' + (isParent ? ' parent-bar' : '');
       bar.style.left = x + 'px';
-      bar.style.width = Math.max(w, minBarW) + 'px';
+      bar.style.width = w + 'px';
       bar.style.top = '50%';
       bar.style.transform = 'translateY(-50%)';
 
@@ -1310,7 +1311,6 @@ function startDrag(e, task) {
   const origStart = parseDate(task.StartDate);
   const origEnd = parseDate(task.EndDate);
   const dur = diffDays(origStart, origEnd) + 1;
-  const minBarW = dayW < 14 ? dayW * 7 : dayW;
 
   // Snapshot subtask original dates (for parent-drag bulk shift)
   const subtasks = task.subtasks || [];
@@ -1332,7 +1332,7 @@ function startDrag(e, task) {
     const x = dateToX(task.StartDate);
     const w = dateToX(task.EndDate) + dayW - x;
     bar.style.left = x + 'px';
-    bar.style.width = Math.max(w, minBarW) + 'px';
+    bar.style.width = Math.max(w, minBarW()) + 'px';
 
     // Shift subtasks and update their bars live
     origSubDates.forEach(({ task: sub, start, end, dur: sd, bar: subBar }) => {
@@ -1343,7 +1343,7 @@ function startDrag(e, task) {
         const sx = dateToX(sub.StartDate);
         const sw = dateToX(sub.EndDate) + dayW - sx;
         subBar.style.left = sx + 'px';
-        subBar.style.width = Math.max(sw, minBarW) + 'px';
+        subBar.style.width = Math.max(sw, minBarW()) + 'px';
       }
     });
   }
@@ -1370,7 +1370,6 @@ function startResize(e, task, side) {
   const startX = e.clientX;
   const origStart = parseDate(task.StartDate);
   const origEnd = parseDate(task.EndDate);
-  const minBarW = dayW < 14 ? dayW * 7 : dayW;
 
   function onMove(e) {
     const dx = e.clientX - startX;
@@ -1381,13 +1380,13 @@ function startResize(e, task, side) {
       const x = diffDays(minDate, startOfDay(newStart)) * dayW;
       const w = (diffDays(startOfDay(newStart), startOfDay(origEnd)) + 1) * dayW;
       bar.style.left = x + 'px';
-      bar.style.width = Math.max(w, minBarW) + 'px';
+      bar.style.width = Math.max(w, minBarW()) + 'px';
     } else {
       const newEnd = addDays(origEnd, daysDelta);
       if (newEnd < origStart) return;
       const x = diffDays(minDate, startOfDay(origStart)) * dayW;
       const w = (diffDays(startOfDay(origStart), startOfDay(newEnd)) + 1) * dayW;
-      bar.style.width = Math.max(w, minBarW) + 'px';
+      bar.style.width = Math.max(w, minBarW()) + 'px';
     }
   }
 
@@ -1962,8 +1961,7 @@ function exportPNG() {
 
     if (task.StartDate && task.EndDate) {
       const x = dateToX(task.StartDate);
-      const minBarW = dayW < 14 ? dayW * 7 : dayW;
-      const barW = Math.max(dateToX(task.EndDate) + dayW - x, minBarW);
+      const barW = Math.max(dateToX(task.EndDate) + dayW - x, minBarW());
       const barH = isParent ? 8 : 22;
       const barX = gx + x;
       const barY = ry + (ROW_H - barH) / 2;
@@ -2125,32 +2123,22 @@ document.getElementById('panel-resize').addEventListener('keydown', e => {
 });
 
 // ─── KEYBOARD ────────────────────────────────────────────────────────────────
-// Focus trap for modal
-document.getElementById('modal').addEventListener('keydown', e => {
-  if (e.key !== 'Tab') return;
-  const focusable = Array.from(e.currentTarget.querySelectorAll(
-    'input, select, button, [tabindex]:not([tabindex="-1"])'
-  )).filter(el => !el.disabled);
-  if (!focusable.length) return;
-  const first = focusable[0], last = focusable[focusable.length - 1];
-  if (e.shiftKey) {
-    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-  } else {
-    if (document.activeElement === last) { e.preventDefault(); first.focus(); }
-  }
-});
+function trapFocus(container, selector) {
+  container.addEventListener('keydown', e => {
+    if (e.key !== 'Tab') return;
+    const focusable = Array.from(container.querySelectorAll(selector)).filter(el => !el.disabled);
+    if (!focusable.length) return;
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+    } else {
+      if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+}
 
-document.getElementById('confirm-box').addEventListener('keydown', e => {
-  if (e.key !== 'Tab') return;
-  const btns = Array.from(e.currentTarget.querySelectorAll('button')).filter(b => !b.disabled);
-  if (!btns.length) return;
-  const first = btns[0], last = btns[btns.length - 1];
-  if (e.shiftKey) {
-    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-  } else {
-    if (document.activeElement === last) { e.preventDefault(); first.focus(); }
-  }
-});
+trapFocus(document.getElementById('modal'), 'input, select, button, [tabindex]:not([tabindex="-1"])');
+trapFocus(document.getElementById('confirm-box'), 'button');
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {

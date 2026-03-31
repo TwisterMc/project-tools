@@ -375,7 +375,7 @@ svg#connections {
 
 <div id="topbar">
   <span class="logo">◈ sitemap</span>
-  <input id="project-name" type="text" value="New Sitemap" spellcheck="false">
+  <input id="project-name" type="text" value="New Sitemap" spellcheck="false" oninput="_dbSaveName(this.value)">
   <div class="divider"></div>
 
   <button class="btn" onclick="openModal('add-root', null)">+ Add Menu</button>
@@ -530,6 +530,7 @@ function deleteNode(id) {
 function render() {
   renderNodes();
   renderConnections();
+  saveState();
 }
 
 let _rafId = null;
@@ -1094,8 +1095,72 @@ function saveFile() {
   setTimeout(() => URL.revokeObjectURL(url), 100);
 }
 
+// ── INDEXEDDB PERSISTENCE ─────────────────────────────────────────────────────
+let _db = null;
+function getDB() {
+  if (_db) return Promise.resolve(_db);
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('sitemap', 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore('kv');
+    req.onsuccess = e => { _db = e.target.result; resolve(_db); };
+    req.onerror = reject;
+  });
+}
+
+async function dbSet(key, val) {
+  try {
+    const db = await getDB();
+    const tx = db.transaction('kv', 'readwrite');
+    tx.objectStore('kv').put(val, key);
+  } catch(e) { console.warn('dbSet failed:', e); }
+}
+
+async function dbGet(key) {
+  try {
+    const db = await getDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction('kv', 'readonly');
+      const req = tx.objectStore('kv').get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(undefined);
+    });
+  } catch(e) { return undefined; }
+}
+
+function debounce(fn, ms) {
+  let timer;
+  return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
+}
+
+function getState() {
+  return { nodes, nextId, panX, panY, scale };
+}
+
+const _dbSaveState = debounce(s => dbSet('state', s), 500);
+const _dbSaveName  = debounce(n => dbSet('name', n), 500);
+
+function saveState() {
+  _dbSaveState(getState());
+  _dbSaveName(document.getElementById('project-name').value);
+}
+
 // ── INIT ─────────────────────────────────────────────────────────────────────
-render();
+(async () => {
+  const saved = await dbGet('state');
+  if (saved) {
+    if (Array.isArray(saved.nodes)) {
+      nodes = saved.nodes;
+      nextId = saved.nextId ?? (nodes.length ? nodes.reduce((m, n) => Math.max(m, n.id), 0) + 1 : 1);
+      _rebuildMaps();
+    }
+    if (saved.panX != null) panX = saved.panX;
+    if (saved.panY != null) panY = saved.panY;
+    if (saved.scale != null) scale = saved.scale;
+    const name = await dbGet('name');
+    if (name) document.getElementById('project-name').value = name;
+  }
+  render();
+})();
 </script>
 </body>
 </html>

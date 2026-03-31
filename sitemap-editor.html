@@ -100,22 +100,6 @@ body {
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn.primary:hover { background: #1a4de8; }
 
-/* LEGEND PILLS */
-.nav-type-group {
-  display: flex; align-items: center; gap: 6px;
-}
-.nav-pill {
-  display: flex; align-items: center; gap: 5px;
-  padding: 3px 9px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1.5px solid transparent;
-  transition: all 0.12s;
-  font-family: 'DM Mono', monospace;
-}
-.nav-pill.active { border-color: currentColor; }
 
 /* CANVAS */
 #canvas-wrap {
@@ -306,12 +290,6 @@ svg#connections {
 
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
 
-/* NAV TYPE COLORS */
-.type-header   { --tc: #2a5cff; }
-.type-footer   { --tc: #059669; }
-.type-utility  { --tc: #d97706; }
-.type-sidebar  { --tc: #7c3aed; }
-.type-page     { --tc: #64748b; }
 
 /* CONTEXT MENU */
 #ctx-menu {
@@ -401,16 +379,7 @@ svg#connections {
   <input id="project-name" type="text" value="New Sitemap" spellcheck="false">
   <div class="divider"></div>
 
-  <div class="nav-type-group">
-    <span style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;">SECTION</span>
-    <button class="nav-pill type-header" id="pill-header" onclick="setActiveType('header')" style="color:#2a5cff;background:#eaefff;">Header</button>
-    <button class="nav-pill type-footer" id="pill-footer" onclick="setActiveType('footer')" style="color:#059669;background:#ecfdf5;">Footer</button>
-    <button class="nav-pill type-utility" id="pill-utility" onclick="setActiveType('utility')" style="color:#d97706;background:#fffbeb;">Utility</button>
-    <button class="nav-pill type-sidebar" id="pill-sidebar" onclick="setActiveType('sidebar')" style="color:#7c3aed;background:#f5f3ff;">Sidebar</button>
-    <button class="nav-pill type-page active" id="pill-page" onclick="setActiveType('page')" style="color:#64748b;background:#f1f5f9;">Page</button>
-  </div>
-
-  <div class="divider"></div>
+  <button class="btn" onclick="openModal('add-root', null)">+ Add Menu</button>
   <button class="btn" onclick="autoLayout()">Auto Layout</button>
   <div class="spacer"></div>
   <button class="btn" onclick="openFile()">Open .json</button>
@@ -424,16 +393,8 @@ svg#connections {
   </div>
 </div>
 
-<!-- CONTEXT MENU -->
-<div id="ctx-menu" role="menu">
-  <button class="ctx-item" role="menuitem" onclick="ctxAddChild()">+ Add child page</button>
-  <button class="ctx-item" role="menuitem" onclick="ctxAddSibling()">+ Add sibling page</button>
-  <div class="ctx-sep" role="separator"></div>
-  <button class="ctx-item" role="menuitem" onclick="ctxEdit()">Edit label</button>
-  <button class="ctx-item" role="menuitem" onclick="ctxChangeType()">Change section type</button>
-  <div class="ctx-sep" role="separator"></div>
-  <button class="ctx-item danger" role="menuitem" onclick="ctxDelete()">Delete node</button>
-</div>
+<!-- CONTEXT MENU (populated dynamically by buildCtxMenu) -->
+<div id="ctx-menu" role="menu"></div>
 
 <!-- MODAL -->
 <dialog id="modal-overlay" aria-labelledby="modal-title">
@@ -444,18 +405,15 @@ svg#connections {
       <input id="f-label" type="text" placeholder="e.g. About Us" required maxlength="200">
     </div>
     <div class="form-group">
-      <label for="f-type">Section Type</label>
+      <label for="f-type">Type</label>
       <select id="f-type">
-        <option value="header">Header Nav</option>
-        <option value="footer">Footer Nav</option>
-        <option value="utility">Utility Nav</option>
-        <option value="sidebar">Sidebar Nav</option>
         <option value="page" selected>Page</option>
+        <option value="group">Group</option>
       </select>
     </div>
     <div class="modal-actions">
-      <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" onclick="saveModal()">Save</button>
+      <button type="button" class="btn" onclick="closeModal()">Cancel</button>
+      <button type="button" class="btn primary" onclick="saveModal()">Save</button>
     </div>
   </div>
 </dialog>
@@ -475,7 +433,6 @@ svg#connections {
 let nodes = [];
 let nextId = 1;
 let selectedId = null;
-let activeType = 'page';
 let ctxTargetId = null;
 let modalMode = null; // 'add-child' | 'add-sibling' | 'edit' | 'add-root'
 let modalParentId = null;
@@ -528,11 +485,9 @@ let didDrag = false;
 
 // ── TYPE CONFIG ──────────────────────────────────────────────────────────────
 const TYPE_CONFIG = {
-  header:  { label: 'Header',  color: '#2a5cff', bg: '#eaefff' },
-  footer:  { label: 'Footer',  color: '#059669', bg: '#ecfdf5' },
-  utility: { label: 'Utility', color: '#d97706', bg: '#fffbeb' },
-  sidebar: { label: 'Sidebar', color: '#7c3aed', bg: '#f5f3ff' },
-  page:    { label: 'Page',    color: '#64748b', bg: '#f1f5f9' },
+  menu:  { label: 'Menu',  color: '#1a1916', bg: '#f0efeb' },
+  page:  { label: 'Page',  color: '#64748b', bg: '#f1f5f9' },
+  group: { label: 'Group', color: '#0891b2', bg: '#ecfeff' },
 };
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
@@ -546,13 +501,6 @@ function canvasToWorld(cx, cy) {
 
 function worldToCanvas(wx, wy) {
   return { x: wx * scale + panX, y: wy * scale + panY };
-}
-
-// ── ACTIVE TYPE ──────────────────────────────────────────────────────────────
-function setActiveType(type) {
-  activeType = type;
-  document.querySelectorAll('.nav-pill').forEach(p => p.classList.remove('active'));
-  document.getElementById('pill-' + type).classList.add('active');
 }
 
 // ── NODE CREATION ─────────────────────────────────────────────────────────────
@@ -878,17 +826,70 @@ function resetView() {
 }
 
 // ── CONTEXT MENU ──────────────────────────────────────────────────────────────
+let ctxWorldPos = { x: 200, y: 200 };
+
+function _ctxItem(text, fn, danger = false) {
+  const btn = document.createElement('button');
+  btn.className = 'ctx-item' + (danger ? ' danger' : '');
+  btn.setAttribute('role', 'menuitem');
+  btn.textContent = text;
+  btn.onclick = fn;
+  return btn;
+}
+function _ctxSep() {
+  const d = document.createElement('div');
+  d.className = 'ctx-sep'; d.setAttribute('role', 'separator');
+  return d;
+}
+
+function buildCtxMenu(nodeId) {
+  const menu = document.getElementById('ctx-menu');
+  menu.innerHTML = '';
+  if (!nodeId) {
+    menu.appendChild(_ctxItem('+ Add menu', () => { closeCtxMenu(); openModal('add-root', null, ctxWorldPos.x, ctxWorldPos.y); }));
+    return;
+  }
+  const node = findNode(nodeId);
+  if (!node) return;
+  const isMenu = !node.parentId;
+
+  menu.appendChild(_ctxItem('+ Add child',
+    () => { closeCtxMenu(); openModal('add-child', nodeId); }));
+  if (!isMenu) {
+    menu.appendChild(_ctxItem('+ Add sibling',
+      () => { closeCtxMenu(); openModal('add-sibling', nodeId); }));
+  }
+  menu.appendChild(_ctxSep());
+  menu.appendChild(_ctxItem('Edit', () => { closeCtxMenu(); openModal('edit', nodeId); }));
+  menu.appendChild(_ctxSep());
+  menu.appendChild(_ctxItem('Delete', () => { closeCtxMenu(); deleteNode(nodeId); render(); }, true));
+}
+
+function showCtxMenu(e, nodeId) {
+  buildCtxMenu(nodeId);
+  const menu = document.getElementById('ctx-menu');
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+  menu.classList.add('open');
+}
+
 function onNodeContextMenu(e, id) {
   e.preventDefault();
   e.stopPropagation();
   selectedId = id;
   ctxTargetId = id;
-  const menu = document.getElementById('ctx-menu');
-  menu.style.left = e.clientX + 'px';
-  menu.style.top = e.clientY + 'px';
-  menu.classList.add('open');
+  showCtxMenu(e, id);
   render();
 }
+
+document.getElementById('canvas-wrap').addEventListener('contextmenu', e => {
+  if (e.target.closest('.node')) return;
+  e.preventDefault();
+  const rect = document.getElementById('canvas-wrap').getBoundingClientRect();
+  ctxWorldPos = canvasToWorld(e.clientX - rect.left, e.clientY - rect.top);
+  ctxTargetId = null;
+  showCtxMenu(e, null);
+});
 
 function closeCtxMenu() { document.getElementById('ctx-menu').classList.remove('open'); }
 document.addEventListener('click', closeCtxMenu);
@@ -897,52 +898,72 @@ document.getElementById('modal-overlay').addEventListener('click', e => {
   if (!document.getElementById('modal').contains(e.target)) closeModal();
 });
 
-function ctxAddChild() { closeCtxMenu(); openModal('add-child', ctxTargetId); }
-function ctxAddSibling() { closeCtxMenu(); openModal('add-sibling', ctxTargetId); }
-function ctxEdit() { closeCtxMenu(); openModal('edit', ctxTargetId); }
-function ctxDelete() { closeCtxMenu(); deleteNode(ctxTargetId); render(); }
-function ctxChangeType() {
-  closeCtxMenu();
-  const node = findNode(ctxTargetId);
-  if (!node) return;
-  openModal('edit', ctxTargetId);
-}
-
 // ── MODAL ─────────────────────────────────────────────────────────────────────
 let pendingX = null, pendingY = null;
+let modalContext = 'menu'; // 'menu' | 'child-of-menu' | 'leaf'
+
+// Determines which type-select options to show based on where in the tree we are
+function getNodeContext(mode, nodeId) {
+  if (mode === 'add-root') return 'menu';
+  const node = findNode(nodeId);
+  if (!node) return 'menu';
+  if (mode === 'add-child') {
+    return !node.parentId ? 'child-of-menu' : 'leaf';
+  }
+  if (mode === 'add-sibling') {
+    if (!node.parentId) return 'menu';
+    return !findNode(node.parentId)?.parentId ? 'child-of-menu' : 'leaf';
+  }
+  if (mode === 'edit') {
+    if (!node.parentId) return 'menu';
+    return !findNode(node.parentId)?.parentId ? 'child-of-menu' : 'leaf';
+  }
+  return 'menu';
+}
+
+function setModalTypeOptions(context, currentType) {
+  const fType = document.getElementById('f-type');
+  const typeGroup = fType.closest('.form-group');
+  if (context === 'child-of-menu') {
+    typeGroup.style.display = '';
+    fType.innerHTML = `<option value="page"${currentType !== 'group' ? ' selected' : ''}>Page</option>`
+                    + `<option value="group"${currentType === 'group' ? ' selected' : ''}>Group</option>`;
+  } else {
+    // menu context and leaf context: no type selection
+    typeGroup.style.display = 'none';
+  }
+}
 
 function openModal(mode, nodeId, x, y) {
   modalMode = mode;
   modalParentId = nodeId;
-  pendingX = x; pendingY = y;
+  pendingX = x ?? null; pendingY = y ?? null;
+  modalContext = getNodeContext(mode, nodeId);
 
   const overlay = document.getElementById('modal-overlay');
-  const title = document.getElementById('modal-title');
   const fLabel = document.getElementById('f-label');
-  const fType = document.getElementById('f-type');
+  let titleText, labelVal = '', defaultType = 'page';
 
   if (mode === 'edit') {
     const node = findNode(nodeId);
-    title.textContent = 'Edit Page';
-    fLabel.value = node.label;
-    fType.value = node.type;
+    titleText = modalContext === 'menu' ? 'Edit Menu' : 'Edit';
+    labelVal = node?.label ?? '';
+    defaultType = node?.type ?? 'page';
   } else if (mode === 'add-child') {
-    const parent = findNode(nodeId);
-    title.textContent = 'Add Child Page';
-    fLabel.value = '';
-    fType.value = parent ? parent.type : activeType;
+    titleText = modalContext === 'child-of-menu' ? 'Add Child' : 'Add Page';
   } else if (mode === 'add-sibling') {
-    const node = findNode(nodeId);
-    const parent = node ? findNode(node.parentId) : null;
-    title.textContent = 'Add Sibling Page';
-    fLabel.value = '';
-    fType.value = node ? node.type : activeType;
-  } else {
-    title.textContent = 'Add Page';
-    fLabel.value = '';
-    fType.value = activeType;
+    titleText = modalContext === 'menu' ? 'Add Menu'
+              : modalContext === 'child-of-menu' ? 'Add Sibling'
+              : 'Add Page';
+    defaultType = 'page';
+  } else { // add-root
+    titleText = 'Add Menu';
+    defaultType = 'menu';
   }
 
+  document.getElementById('modal-title').textContent = titleText;
+  fLabel.value = labelVal;
+  setModalTypeOptions(modalContext, defaultType);
   overlay.showModal();
   fLabel.focus();
 }
@@ -955,15 +976,17 @@ function closeModal() {
 function saveModal() {
   const label = document.getElementById('f-label').value.trim();
   if (!label) { document.getElementById('f-label').focus(); return; }
-  const type = document.getElementById('f-type').value;
+  const type = modalContext === 'menu' ? 'menu'
+             : modalContext === 'leaf' ? 'page'
+             : document.getElementById('f-type').value;
 
   if (modalMode === 'edit') {
     const node = findNode(modalParentId);
     if (node) { node.label = label; node.type = type; }
   } else if (modalMode === 'add-child') {
     const parent = findNode(modalParentId);
-    const x = parent ? parent.x : (pendingX || 100);
-    const y = parent ? parent.y + 100 : (pendingY || 100);
+    const x = parent ? parent.x : (pendingX ?? 100);
+    const y = parent ? parent.y + 100 : (pendingY ?? 100);
     const children = childrenOf(modalParentId);
     const cx = parent ? parent.x + (children.length * 160) - (Math.max(0, children.length - 1) * 80) : x;
     createNode(label, type, modalParentId, cx, y);
@@ -975,12 +998,14 @@ function saveModal() {
       const x = lastSib ? lastSib.x + 160 : node.x + 160;
       createNode(label, type, node.parentId, x, node.y);
     }
-  } else {
-    // add-root: standalone node at click position
-    createNode(label, type, null, pendingX || 200, pendingY || 200);
+  } else { // add-root
+    const roots = nodes.filter(n => !n.parentId);
+    const x = pendingX ?? (roots.length ? roots.reduce((m, r) => Math.max(m, r.x), 0) + 200 : 60);
+    const y = pendingY ?? 60;
+    createNode(label, type, null, x, y);
   }
 
-  document.getElementById('modal-overlay').close();
+  closeModal();
   render();
 }
 
@@ -1039,12 +1064,17 @@ function loadFile(e) {
       const valid = data.nodes.every(n =>
         n && typeof n.id === 'number' &&
         typeof n.label === 'string' && n.label.length > 0 &&
-        typeof n.type === 'string' && n.type in TYPE_CONFIG &&
+        typeof n.type === 'string' &&
         (n.parentId === null || n.parentId === undefined || typeof n.parentId === 'number') &&
         typeof n.x === 'number' && typeof n.y === 'number'
       );
       if (!valid) throw new Error('One or more nodes failed validation');
-      nodes = data.nodes;
+      // Migrate legacy menu sub-types to 'menu'
+      const legacyMenuTypes = new Set(['header', 'footer', 'utility', 'sidebar']);
+      nodes = data.nodes.map(n => ({
+        ...n,
+        type: legacyMenuTypes.has(n.type) ? 'menu' : (n.type in TYPE_CONFIG ? n.type : 'page'),
+      }));
       _rebuildMaps();
       nextId = nodes.length ? nodes.reduce((m, n) => Math.max(m, n.id), 0) + 1 : 1;
       document.getElementById('project-name').value = data.name || file.name.replace(/\.json$/i, '');
@@ -1066,16 +1096,7 @@ function saveFile() {
 }
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
-// Default starter tree
-const home = createNode('Home', 'header', null, 300, 60);
-const about = createNode('About', 'header', home.id, 100, 200);
-const services = createNode('Services', 'header', home.id, 260, 200);
-const contact = createNode('Contact', 'header', home.id, 420, 200);
-createNode('Our Team', 'page', about.id, 100, 340);
-createNode('Service A', 'page', services.id, 200, 340);
-createNode('Service B', 'page', services.id, 360, 340);
-
-autoLayout();
+render();
 </script>
 </body>
 </html>

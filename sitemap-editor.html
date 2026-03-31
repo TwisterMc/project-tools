@@ -98,6 +98,8 @@ body {
 .btn:hover { background: var(--border); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn.primary:hover { background: #1a4de8; }
+.btn.danger { background: #c0392b; border-color: #c0392b; color: #fff; }
+.btn.danger:hover { background: #a93226; }
 
 
 /* CANVAS */
@@ -395,6 +397,18 @@ svg#connections {
 <!-- CONTEXT MENU (populated dynamically by buildCtxMenu) -->
 <div id="ctx-menu" role="menu"></div>
 
+<!-- CONFIRM DELETE MODAL -->
+<dialog id="confirm-overlay" aria-labelledby="confirm-title" aria-modal="true">
+  <div id="modal">
+    <h3 id="confirm-title">Delete node?</h3>
+    <p id="confirm-msg" style="margin:0 0 16px;color:var(--text2);font-size:13px;"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn" onclick="closeConfirm()">Cancel</button>
+      <button type="button" class="btn danger" id="confirm-ok">Delete</button>
+    </div>
+  </div>
+</dialog>
+
 <!-- MODAL -->
 <dialog id="modal-overlay" aria-labelledby="modal-title">
   <div id="modal">
@@ -526,6 +540,25 @@ function deleteNode(id) {
   if (selectedId === id) selectedId = null;
 }
 
+function confirmDelete(id) {
+  const node = nodeMap.get(id);
+  if (!node) return;
+  const childCount = childrenOf(id).length;
+  const msg = childCount
+    ? `"${node.label}" and its ${childCount} child node${childCount > 1 ? 's' : ''} will be permanently removed.`
+    : `"${node.label}" will be permanently removed.`;
+  document.getElementById('confirm-msg').textContent = msg;
+  const dlg = document.getElementById('confirm-overlay');
+  const okBtn = document.getElementById('confirm-ok');
+  okBtn.onclick = () => { dlg.close(); deleteNode(id); render(); };
+  dlg.showModal();
+  okBtn.focus();
+}
+
+function closeConfirm() {
+  document.getElementById('confirm-overlay').close();
+}
+
 // ── RENDER ────────────────────────────────────────────────────────────────────
 function render() {
   renderNodes();
@@ -597,7 +630,7 @@ function buildNodeEl(node) {
   delBtn.className = 'na-btn del';
   delBtn.textContent = '✕';
   delBtn.onmousedown = e => e.stopPropagation();
-  delBtn.onclick = e => { e.stopPropagation(); deleteNode(node.id); render(); };
+  delBtn.onclick = e => { e.stopPropagation(); confirmDelete(node.id); };
   actions.appendChild(delBtn);
 
   el.appendChild(actions);
@@ -767,8 +800,7 @@ document.addEventListener('keydown', e => {
     if (selectedId && !document.getElementById('modal-overlay').open) {
       const active = document.activeElement;
       if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
-      deleteNode(selectedId);
-      render();
+      confirmDelete(selectedId);
     }
   }
   if (e.key === 'Enter' && document.getElementById('modal-overlay').open) {
@@ -862,7 +894,7 @@ function buildCtxMenu(nodeId) {
   menu.appendChild(_ctxSep());
   menu.appendChild(_ctxItem('Edit', () => { closeCtxMenu(); openModal('edit', nodeId); }));
   menu.appendChild(_ctxSep());
-  menu.appendChild(_ctxItem('Delete', () => { closeCtxMenu(); deleteNode(nodeId); render(); }, true));
+  menu.appendChild(_ctxItem('Delete', () => { closeCtxMenu(); confirmDelete(nodeId); }, true));
 }
 
 function showCtxMenu(e, nodeId) {

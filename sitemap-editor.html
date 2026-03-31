@@ -460,7 +460,7 @@ svg#connections {
   </div>
 </dialog>
 
-<div id="hint">Click canvas to add node · Drag to move · Right-click for options · Scroll to zoom · Space+drag to pan</div>
+<div id="hint">Right-click to add node · Drag to move · Scroll to zoom · Space+drag to pan</div>
 <div id="zoom-indicator">
   <button class="zoom-btn" onclick="zoomBy(-0.1)">−</button>
   <span id="zoom-label">100%</span>
@@ -785,19 +785,9 @@ document.addEventListener('mouseup', e => {
 // ── CANVAS CLICK (add node) ───────────────────────────────────────────────────
 document.getElementById('canvas-wrap').addEventListener('click', e => {
   if (didDrag) { didDrag = false; return; }
-  if (e.target.closest('.node') || e.target.closest('#ctx-menu') || e.target.closest('#topbar')) return;
-  if (e.target !== document.getElementById('canvas-wrap') &&
-      e.target !== document.getElementById('canvas') &&
-      e.target !== document.getElementById('connections') &&
-      !e.target.closest('svg')) return;
-
+  if (e.target.closest('.node') || e.target.closest('#ctx-menu')) return;
   closeCtxMenu();
   selectedId = null;
-
-  const rect = document.getElementById('canvas-wrap').getBoundingClientRect();
-  const worldPos = canvasToWorld(e.clientX - rect.left, e.clientY - rect.top);
-
-  openModal('add-root', null, worldPos.x - 70, worldPos.y - 22);
   render();
 });
 

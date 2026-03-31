@@ -255,15 +255,15 @@ svg#connections {
 
 /* MODAL */
 #modal-overlay {
-  display: none;
-  position: fixed; inset: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  overflow: visible;
+}
+#modal-overlay::backdrop {
   background: rgba(0,0,0,0.25);
-  z-index: 1000;
-  align-items: center;
-  justify-content: center;
   backdrop-filter: blur(1px);
 }
-#modal-overlay.open { display: flex; }
 
 #modal {
   background: var(--surface);
@@ -323,12 +323,19 @@ svg#connections {
 }
 #ctx-menu.open { display: block; }
 .ctx-item {
+  width: 100%;
   padding: 7px 12px;
   border-radius: 5px;
   font-size: 12px;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text);
   cursor: pointer;
   transition: background 0.1s;
   display: flex; align-items: center; gap: 8px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  appearance: none;
 }
 .ctx-item:hover { background: var(--surface2); }
 .ctx-item.danger { color: #e53e3e; }
@@ -392,11 +399,11 @@ svg#connections {
 
   <div class="nav-type-group">
     <span style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;">SECTION</span>
-    <div class="nav-pill type-header" id="pill-header" onclick="setActiveType('header')" style="color:#2a5cff;background:#eaefff;">Header</div>
-    <div class="nav-pill type-footer" id="pill-footer" onclick="setActiveType('footer')" style="color:#059669;background:#ecfdf5;">Footer</div>
-    <div class="nav-pill type-utility" id="pill-utility" onclick="setActiveType('utility')" style="color:#d97706;background:#fffbeb;">Utility</div>
-    <div class="nav-pill type-sidebar" id="pill-sidebar" onclick="setActiveType('sidebar')" style="color:#7c3aed;background:#f5f3ff;">Sidebar</div>
-    <div class="nav-pill type-page active" id="pill-page" onclick="setActiveType('page')" style="color:#64748b;background:#f1f5f9;">Page</div>
+    <button class="nav-pill type-header" id="pill-header" onclick="setActiveType('header')" style="color:#2a5cff;background:#eaefff;">Header</button>
+    <button class="nav-pill type-footer" id="pill-footer" onclick="setActiveType('footer')" style="color:#059669;background:#ecfdf5;">Footer</button>
+    <button class="nav-pill type-utility" id="pill-utility" onclick="setActiveType('utility')" style="color:#d97706;background:#fffbeb;">Utility</button>
+    <button class="nav-pill type-sidebar" id="pill-sidebar" onclick="setActiveType('sidebar')" style="color:#7c3aed;background:#f5f3ff;">Sidebar</button>
+    <button class="nav-pill type-page active" id="pill-page" onclick="setActiveType('page')" style="color:#64748b;background:#f1f5f9;">Page</button>
   </div>
 
   <div class="divider"></div>
@@ -408,32 +415,32 @@ svg#connections {
 
 <div id="canvas-wrap">
   <div id="canvas">
-    <svg id="connections"></svg>
+    <svg id="connections" aria-hidden="true" role="presentation"></svg>
     <div id="nodes-layer"></div>
   </div>
 </div>
 
 <!-- CONTEXT MENU -->
-<div id="ctx-menu">
-  <div class="ctx-item" onclick="ctxAddChild()">+ Add child page</div>
-  <div class="ctx-item" onclick="ctxAddSibling()">+ Add sibling page</div>
-  <div class="ctx-sep"></div>
-  <div class="ctx-item" onclick="ctxEdit()">Edit label</div>
-  <div class="ctx-item" onclick="ctxChangeType()">Change section type</div>
-  <div class="ctx-sep"></div>
-  <div class="ctx-item danger" onclick="ctxDelete()">Delete node</div>
+<div id="ctx-menu" role="menu">
+  <button class="ctx-item" role="menuitem" onclick="ctxAddChild()">+ Add child page</button>
+  <button class="ctx-item" role="menuitem" onclick="ctxAddSibling()">+ Add sibling page</button>
+  <div class="ctx-sep" role="separator"></div>
+  <button class="ctx-item" role="menuitem" onclick="ctxEdit()">Edit label</button>
+  <button class="ctx-item" role="menuitem" onclick="ctxChangeType()">Change section type</button>
+  <div class="ctx-sep" role="separator"></div>
+  <button class="ctx-item danger" role="menuitem" onclick="ctxDelete()">Delete node</button>
 </div>
 
 <!-- MODAL -->
-<div id="modal-overlay" onclick="closeModal(event)">
+<dialog id="modal-overlay" aria-labelledby="modal-title">
   <div id="modal">
     <h3 id="modal-title">Add Page</h3>
     <div class="form-group">
-      <label>Label</label>
-      <input id="f-label" type="text" placeholder="e.g. About Us">
+      <label for="f-label">Label</label>
+      <input id="f-label" type="text" placeholder="e.g. About Us" required maxlength="200">
     </div>
     <div class="form-group">
-      <label>Section Type</label>
+      <label for="f-type">Section Type</label>
       <select id="f-type">
         <option value="header">Header Nav</option>
         <option value="footer">Footer Nav</option>
@@ -447,7 +454,7 @@ svg#connections {
       <button class="btn primary" onclick="saveModal()">Save</button>
     </div>
   </div>
-</div>
+</dialog>
 
 <div id="hint">Click canvas to add node · Drag to move · Right-click for options · Scroll to zoom · Space+drag to pan</div>
 <div id="zoom-indicator">
@@ -468,6 +475,38 @@ let activeType = 'page';
 let ctxTargetId = null;
 let modalMode = null; // 'add-child' | 'add-sibling' | 'edit' | 'add-root'
 let modalParentId = null;
+
+// ── NODE LOOKUP MAPS ──────────────────────────────────────────────────────────
+const nodeMap = new Map();     // id → node  (O(1) findNode)
+const childrenMap = new Map(); // id → node[] (O(1) childrenOf)
+
+function _addToMaps(node) {
+  nodeMap.set(node.id, node);
+  const p = node.parentId ?? null;
+  if (!childrenMap.has(p)) childrenMap.set(p, []);
+  childrenMap.get(p).push(node);
+  if (!childrenMap.has(node.id)) childrenMap.set(node.id, []);
+}
+
+function _removeFromMaps(node) {
+  nodeMap.delete(node.id);
+  const p = node.parentId ?? null;
+  const sibs = childrenMap.get(p);
+  if (sibs) { const i = sibs.indexOf(node); if (i !== -1) sibs.splice(i, 1); }
+  childrenMap.delete(node.id);
+}
+
+function _rebuildMaps() {
+  nodeMap.clear();
+  childrenMap.clear();
+  nodes.forEach(n => {
+    nodeMap.set(n.id, n);
+    const p = n.parentId ?? null;
+    if (!childrenMap.has(p)) childrenMap.set(p, []);
+    childrenMap.get(p).push(n);
+    if (!childrenMap.has(n.id)) childrenMap.set(n.id, []);
+  });
+}
 
 // Canvas pan/zoom
 let scale = 1;
@@ -493,9 +532,9 @@ const TYPE_CONFIG = {
 };
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
-function findNode(id) { return nodes.find(n => n.id === id); }
+function findNode(id) { return nodeMap.get(id); }
 
-function childrenOf(id) { return nodes.filter(n => n.parentId === id); }
+function childrenOf(id) { return childrenMap.get(id) ?? []; }
 
 function canvasToWorld(cx, cy) {
   return { x: (cx - panX) / scale, y: (cy - panY) / scale };
@@ -523,12 +562,15 @@ function createNode(label, type, parentId, x, y) {
     y: y || 100,
   };
   nodes.push(node);
+  _addToMaps(node);
   return node;
 }
 
 function deleteNode(id) {
-  // Delete children recursively
-  childrenOf(id).forEach(c => deleteNode(c.id));
+  childrenOf(id).slice().forEach(c => deleteNode(c.id));
+  const node = nodeMap.get(id);
+  if (!node) return;
+  _removeFromMaps(node);
   nodes = nodes.filter(n => n.id !== id);
   if (selectedId === id) selectedId = null;
 }
@@ -537,6 +579,12 @@ function deleteNode(id) {
 function render() {
   renderNodes();
   renderConnections();
+}
+
+let _rafId = null;
+function scheduleRender() {
+  if (_rafId !== null) return;
+  _rafId = requestAnimationFrame(() => { _rafId = null; render(); });
 }
 
 function renderNodes() {
@@ -703,7 +751,7 @@ document.addEventListener('mousemove', e => {
     if (node) {
       node.x = worldPos.x - dragOffX;
       node.y = worldPos.y - dragOffY;
-      render();
+      scheduleRender();
     }
     return;
   }
@@ -711,7 +759,7 @@ document.addEventListener('mousemove', e => {
   if (isPanning) {
     panX = panOrigin.x + (e.clientX - panStart.x);
     panY = panOrigin.y + (e.clientY - panStart.y);
-    render();
+    scheduleRender();
   }
 });
 
@@ -720,10 +768,12 @@ document.addEventListener('mouseup', e => {
     const el = document.getElementById('nodes-layer').querySelector(`[data-id="${dragNode}"]`);
     if (el) el.classList.remove('dragging');
     dragNode = null;
+    didDrag = true; // suppress the trailing click after any node drag
     render();
   }
   if (isPanning) {
     isPanning = false;
+    didDrag = true; // suppress the trailing click after any pan
     document.getElementById('canvas-wrap').style.cursor = '';
   }
 });
@@ -731,6 +781,7 @@ document.addEventListener('mouseup', e => {
 // ── CANVAS CLICK (add node) ───────────────────────────────────────────────────
 document.getElementById('canvas-wrap').addEventListener('click', e => {
   if (didDrag) { didDrag = false; return; }
+  if (e.target.closest('.node') || e.target.closest('#ctx-menu') || e.target.closest('#topbar')) return;
   if (e.target !== document.getElementById('canvas-wrap') &&
       e.target !== document.getElementById('canvas') &&
       e.target !== document.getElementById('connections') &&
@@ -759,7 +810,7 @@ document.getElementById('canvas-wrap').addEventListener('mousedown', e => {
 });
 
 document.addEventListener('keydown', e => {
-  if (e.code === 'Space' && !document.getElementById('modal-overlay').classList.contains('open')) {
+  if (e.code === 'Space' && !document.getElementById('modal-overlay').open) {
     if (!isPanning) {
       document.getElementById('canvas-wrap').style.cursor = 'grab';
       document.getElementById('canvas-wrap').addEventListener('mousedown', startSpacePan, { once: false });
@@ -771,14 +822,14 @@ document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); saveFile(); }
   if ((e.metaKey || e.ctrlKey) && e.key === 'o') { e.preventDefault(); openFile(); }
   if (e.key === 'Delete' || e.key === 'Backspace') {
-    if (selectedId && !document.getElementById('modal-overlay').classList.contains('open')) {
+    if (selectedId && !document.getElementById('modal-overlay').open) {
       const active = document.activeElement;
       if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
       deleteNode(selectedId);
       render();
     }
   }
-  if (e.key === 'Enter' && document.getElementById('modal-overlay').classList.contains('open')) {
+  if (e.key === 'Enter' && document.getElementById('modal-overlay').open) {
     saveModal();
   }
 });
@@ -848,6 +899,10 @@ function onNodeContextMenu(e, id) {
 function closeCtxMenu() { document.getElementById('ctx-menu').classList.remove('open'); }
 document.addEventListener('click', closeCtxMenu);
 
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (!document.getElementById('modal').contains(e.target)) closeModal();
+});
+
 function ctxAddChild() { closeCtxMenu(); openModal('add-child', ctxTargetId); }
 function ctxAddSibling() { closeCtxMenu(); openModal('add-sibling', ctxTargetId); }
 function ctxEdit() { closeCtxMenu(); openModal('edit', ctxTargetId); }
@@ -894,13 +949,13 @@ function openModal(mode, nodeId, x, y) {
     fType.value = activeType;
   }
 
-  overlay.classList.add('open');
-  setTimeout(() => fLabel.focus(), 50);
+  overlay.showModal();
+  fLabel.focus();
 }
 
-function closeModal(e) {
-  if (e && e.target !== document.getElementById('modal-overlay')) return;
-  document.getElementById('modal-overlay').classList.remove('open');
+function closeModal() {
+  const dlg = document.getElementById('modal-overlay');
+  if (dlg.open) dlg.close();
 }
 
 function saveModal() {
@@ -931,7 +986,7 @@ function saveModal() {
     createNode(label, type, null, pendingX || 200, pendingY || 200);
   }
 
-  document.getElementById('modal-overlay').classList.remove('open');
+  document.getElementById('modal-overlay').close();
   render();
 }
 
@@ -986,9 +1041,19 @@ function loadFile(e) {
   reader.onload = ev => {
     try {
       const data = JSON.parse(ev.target.result);
-      nodes = data.nodes || [];
-      nextId = (nodes.length ? Math.max(...nodes.map(n => n.id)) + 1 : 1);
-      document.getElementById('project-name').value = data.name || file.name.replace('.json','');
+      if (!Array.isArray(data.nodes)) throw new Error('Missing nodes array');
+      const valid = data.nodes.every(n =>
+        n && typeof n.id === 'number' &&
+        typeof n.label === 'string' && n.label.length > 0 &&
+        typeof n.type === 'string' && n.type in TYPE_CONFIG &&
+        (n.parentId === null || n.parentId === undefined || typeof n.parentId === 'number') &&
+        typeof n.x === 'number' && typeof n.y === 'number'
+      );
+      if (!valid) throw new Error('One or more nodes failed validation');
+      nodes = data.nodes;
+      _rebuildMaps();
+      nextId = nodes.length ? nodes.reduce((m, n) => Math.max(m, n.id), 0) + 1 : 1;
+      document.getElementById('project-name').value = data.name || file.name.replace(/\.json$/i, '');
       render();
     } catch(err) { alert('Could not parse file: ' + err.message); }
   };
@@ -1002,7 +1067,8 @@ function saveFile() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = data.name + '.json';
-  a.click(); URL.revokeObjectURL(url);
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 100);
 }
 
 // ── INIT ─────────────────────────────────────────────────────────────────────

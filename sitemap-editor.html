@@ -230,6 +230,27 @@ svg#connections {
 .na-btn.add { color: var(--accent); }
 .na-btn.del:hover { color: #e53e3e; }
 
+/* ANCHOR DOTS */
+.anchor-dots { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: none; pointer-events: none; }
+.node:hover .anchor-dots,
+.node.selected .anchor-dots { display: block; }
+.anchor-dot {
+  position: absolute;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--border2);
+  box-sizing: border-box;
+  cursor: pointer;
+  pointer-events: all;
+  transition: border-color 0.1s, background 0.1s;
+}
+.anchor-dot:hover { border-color: var(--accent); background: var(--accent-light); }
+.anchor-dot.active { background: var(--accent); border-color: var(--accent); }
+.anchor-dot.top   { top: -5px;  left: 50%;  transform: translateX(-50%); }
+.anchor-dot.left  { left: -5px; top: 50%;   transform: translateY(-50%); }
+.anchor-dot.right { right: -5px; top: 50%;  transform: translateY(-50%); }
+
 /* CONNECTOR LINES */
 .conn-line {
   stroke: var(--line);
@@ -635,6 +656,24 @@ function buildNodeEl(node) {
 
   el.appendChild(actions);
 
+  // Anchor dots (entry point for incoming connection)
+  const anchorDots = document.createElement('div');
+  anchorDots.className = 'anchor-dots';
+  ['top', 'left', 'right'].forEach(side => {
+    const dot = document.createElement('div');
+    dot.className = `anchor-dot ${side}`;
+    dot.dataset.anchor = side;
+    dot.title = `Connect to ${side}`;
+    dot.onmousedown = e => e.stopPropagation();
+    dot.onclick = e => {
+      e.stopPropagation();
+      const n = findNode(node.id);
+      if (n) { n.anchor = side; render(); }
+    };
+    anchorDots.appendChild(dot);
+  });
+  el.appendChild(anchorDots);
+
   // Events
   el.addEventListener('mousedown', e => onNodeMouseDown(e, node.id));
   el.addEventListener('contextmenu', e => onNodeContextMenu(e, node.id));
@@ -666,6 +705,13 @@ function updateNodeEl(el, node) {
     tag.textContent = tc.label;
     tag.style.color = tc.color;
   }
+
+  const anchorDots = el.querySelector('.anchor-dots');
+  anchorDots.style.display = isRoot ? 'none' : '';
+  const activeAnchor = node.anchor ?? 'top';
+  anchorDots.querySelectorAll('.anchor-dot').forEach(dot => {
+    dot.classList.toggle('active', dot.dataset.anchor === activeAnchor);
+  });
 }
 
 function renderConnections() {
@@ -686,13 +732,29 @@ function renderConnections() {
 
     const x1 = parent.x + NW / 2;
     const y1 = parent.y + NH;
-    const x2 = node.x + NW / 2;
-    const y2 = node.y;
 
-    const midY = (y1 + y2) / 2;
+    const anchor = node.anchor ?? 'top';
+    let x2, y2, cx1, cy1, cx2, cy2;
+
+    if (anchor === 'left') {
+      x2 = node.x;        y2 = node.y + NH / 2;
+      const bend = Math.max(40, Math.abs(y2 - y1) * 0.5);
+      cx1 = x1;           cy1 = y1 + bend;
+      cx2 = x2 - bend;    cy2 = y2;
+    } else if (anchor === 'right') {
+      x2 = node.x + NW;  y2 = node.y + NH / 2;
+      const bend = Math.max(40, Math.abs(y2 - y1) * 0.5);
+      cx1 = x1;           cy1 = y1 + bend;
+      cx2 = x2 + bend;    cy2 = y2;
+    } else { // top
+      x2 = node.x + NW / 2; y2 = node.y;
+      const midY = (y1 + y2) / 2;
+      cx1 = x1; cy1 = midY;
+      cx2 = x2; cy2 = midY;
+    }
 
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`);
+    path.setAttribute('d', `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`);
     path.setAttribute('class', 'conn-line');
 
     const tc = TYPE_CONFIG[node.type] || TYPE_CONFIG.page;
@@ -1014,7 +1076,10 @@ function saveModal() {
 
   if (modalMode === 'edit') {
     const node = findNode(modalParentId);
-    if (node) { node.label = label; node.type = type; }
+    if (node) {
+      node.label = label;
+      node.type = type;
+    }
   } else if (modalMode === 'add-child') {
     const parent = findNode(modalParentId);
     const x = parent ? parent.x : (pendingX ?? 100);

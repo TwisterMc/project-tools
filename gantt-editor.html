@@ -924,15 +924,17 @@ function computeDateRange() {
     if (e && (!mx || e > mx)) mx = e;
   });
   if (dayW < 14) {
-    // Week view: snap to month boundaries with one full empty month each side
-    const firstTask = mn || new Date();
-    const lastTask = mx || new Date();
-    // Go back 1 month and snap to month start
-    const preMonth = new Date(firstTask.getFullYear(), firstTask.getMonth() - 1, 1);
-    // Go forward 1 month and snap to month end
-    const postMonth = new Date(lastTask.getFullYear(), lastTask.getMonth() + 2, 0);
-    minDate = startOfDay(preMonth);
-    maxDate = startOfDay(addDays(postMonth, 1));
+    // Week view: snap to week (Sunday) boundaries with 2-week padding each side
+    const first = addDays(mn || new Date(), -14);
+    const last = addDays(mx || new Date(), 14);
+    // Snap start back to nearest Sunday
+    const startDow = first.getDay();
+    const snapStart = addDays(first, -startDow);
+    // Snap end forward to next Saturday
+    const endDow = last.getDay();
+    const snapEnd = addDays(last, endDow === 6 ? 0 : 6 - endDow);
+    minDate = startOfDay(snapStart);
+    maxDate = startOfDay(addDays(snapEnd, 1));
   } else {
     minDate = startOfDay(addDays(mn || new Date(), -7));
     maxDate = startOfDay(addDays(mx || new Date(), 8));
@@ -1242,33 +1244,48 @@ function buildTimeHeader(tw) {
   const days = diffDays(minDate, maxDate);
   const today = startOfDay(new Date());
 
-  // Month spans
-  let curMonth = -1, curYear = -1, monthSpan = 0, monthStart = 0;
-  for (let i = 0; i <= days; i++) {
-    const d = addDays(minDate, i);
-    const m = d.getMonth(), y = d.getFullYear();
-    if (m !== curMonth || y !== curYear) {
-      if (curMonth >= 0) {
-        const ml = document.createElement('div');
-        ml.className = 'month-label';
-        ml.style.width = (monthSpan * dayW) + 'px';
-        const lbl = document.createElement('span');
-        lbl.textContent = MONTHS[curMonth] + ' ' + curYear;
-        ml.appendChild(lbl);
-        monthsRow.appendChild(ml);
-      }
-      curMonth = m; curYear = y; monthSpan = 0;
-    }
-    monthSpan++;
-  }
-  if (monthSpan > 0) {
+  // Month spans — week mode iterates by week cell so labels align with cells
+  function makeMonthLabel(text, pxWidth) {
     const ml = document.createElement('div');
     ml.className = 'month-label';
-    ml.style.width = (monthSpan * dayW) + 'px';
+    ml.style.width = pxWidth + 'px';
     const lbl = document.createElement('span');
-    lbl.textContent = MONTHS[curMonth] + ' ' + curYear;
+    lbl.textContent = text;
     ml.appendChild(lbl);
     monthsRow.appendChild(ml);
+  }
+
+  if (dayW < 14) {
+    // Iterate the same week cells as the days row and group by month
+    let i = 0, curMonth = -1, curYear = -1, monthPx = 0;
+    while (i < days) {
+      const d = addDays(minDate, i);
+      const dow = d.getDay();
+      const span = Math.min(7 - dow, days - i);
+      const cellPx = span * dayW;
+      // Representative day: prefer Monday of the week
+      const rep = dow === 0 ? addDays(d, 1) : d;
+      const m = rep.getMonth(), y = rep.getFullYear();
+      if (m !== curMonth || y !== curYear) {
+        if (curMonth >= 0) makeMonthLabel(MONTHS[curMonth] + ' ' + curYear, monthPx);
+        curMonth = m; curYear = y; monthPx = 0;
+      }
+      monthPx += cellPx;
+      i += span;
+    }
+    if (curMonth >= 0) makeMonthLabel(MONTHS[curMonth] + ' ' + curYear, monthPx);
+  } else {
+    let curMonth = -1, curYear = -1, monthSpan = 0;
+    for (let i = 0; i <= days; i++) {
+      const d = addDays(minDate, i);
+      const m = d.getMonth(), y = d.getFullYear();
+      if (m !== curMonth || y !== curYear) {
+        if (curMonth >= 0) makeMonthLabel(MONTHS[curMonth] + ' ' + curYear, monthSpan * dayW);
+        curMonth = m; curYear = y; monthSpan = 0;
+      }
+      monthSpan++;
+    }
+    if (monthSpan > 0) makeMonthLabel(MONTHS[curMonth] + ' ' + curYear, monthSpan * dayW);
   }
 
   // Day cells (or week cells when zoomed out)
@@ -1296,13 +1313,12 @@ function buildTimeHeader(tw) {
       })();
       if (isWeekContainsToday) dl.classList.add('today');
 
-      // Label: "Mar 30" style
+      // Label: date number only
       const lbl = document.createElement('div');
       lbl.className = 'dnum';
       lbl.style.fontSize = '9px';
-      // Show the Monday of this week or the start day if partial
       const labelDay = dow === 0 ? addDays(d, 1) : d; // prefer Mon for label
-      lbl.textContent = MONTHS[labelDay.getMonth()] + ' ' + labelDay.getDate();
+      lbl.textContent = labelDay.getDate();
       dl.appendChild(lbl);
 
       daysRow.appendChild(dl);
@@ -1943,7 +1959,7 @@ function exportPNG() {
       ctx.fillStyle = BORDER;
       ctx.fillRect(cellX + cellW - 1, MONTHS_H, 1, DAYS_H);
       const labelDay = dow === 0 ? addDays(d, 1) : d;
-      const lbl = MONTHS[labelDay.getMonth()] + ' ' + labelDay.getDate();
+      const lbl = String(labelDay.getDate());
       ctx.fillStyle = weekHasToday ? ACCENT : TEXT3;
       ctx.font = '9px DM Mono, monospace';
       ctx.textBaseline = 'middle';

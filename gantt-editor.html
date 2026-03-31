@@ -1337,7 +1337,7 @@ function buildTimeHeader(tw) {
 
       const dow_el = document.createElement('div');
       dow_el.className = 'dow';
-      dow_el.textContent = DAYS[dow];
+      dow_el.textContent = dayW <= 14 ? DAYS[dow][0] : DAYS[dow];
       dl.appendChild(dow_el);
 
       const dnum = document.createElement('div');

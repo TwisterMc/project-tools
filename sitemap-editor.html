@@ -737,15 +737,15 @@ function renderConnections() {
     let x2, y2, cx1, cy1, cx2, cy2;
 
     if (anchor === 'left') {
-      x2 = node.x;        y2 = node.y + NH / 2;
-      const bend = Math.max(40, Math.abs(y2 - y1) * 0.5);
-      cx1 = x1;           cy1 = y1 + bend;
-      cx2 = x2 - bend;    cy2 = y2;
+      x2 = node.x;       y2 = node.y + NH / 2;
+      const drop = Math.max(30, (y2 - y1) * 0.5);
+      cx1 = x1;          cy1 = y1 + drop;
+      cx2 = x2 - 44;     cy2 = y2;
     } else if (anchor === 'right') {
-      x2 = node.x + NW;  y2 = node.y + NH / 2;
-      const bend = Math.max(40, Math.abs(y2 - y1) * 0.5);
-      cx1 = x1;           cy1 = y1 + bend;
-      cx2 = x2 + bend;    cy2 = y2;
+      x2 = node.x + NW; y2 = node.y + NH / 2;
+      const drop = Math.max(30, (y2 - y1) * 0.5);
+      cx1 = x1;          cy1 = y1 + drop;
+      cx2 = x2 + 44;     cy2 = y2;
     } else { // top
       x2 = node.x + NW / 2; y2 = node.y;
       const midY = (y1 + y2) / 2;

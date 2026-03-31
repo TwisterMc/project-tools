@@ -733,6 +733,7 @@ function redo() {
 
 // ─── CONFIRM DIALOG ───────────────────────────────────────────────────────────
 let _modalReturnEl = null, _modalReturnId = null;
+let _lastParentId = null;
 let _confirmReturnEl = null;
 let _confirmOkCallback = null;
 function showConfirm(msg, onOk) {
@@ -1458,10 +1459,11 @@ function toggleCollapse(id) {
 
 // ─── MODAL ───────────────────────────────────────────────────────────────────
 function openAddTask(parentId) {
+  const resolvedParentId = parentId ?? (_lastParentId && state.data.find(t => t.TaskID === _lastParentId) ? _lastParentId : null);
   _modalReturnEl = document.activeElement;
-  _modalReturnId = parentId ? String(parentId) : 'add-btn';
+  _modalReturnId = resolvedParentId ? String(resolvedParentId) : 'add-btn';
   editingId = null;
-  document.getElementById('modal-title').textContent = parentId ? 'Add Subtask' : 'Add Task';
+  document.getElementById('modal-title').textContent = resolvedParentId ? 'Add Subtask' : 'Add Task';
   document.getElementById('f-name').value = '';
   document.getElementById('f-start').value = toDateStr(new Date());
   document.getElementById('f-end').value = toDateStr(addDays(new Date(), 7));
@@ -1469,7 +1471,7 @@ function openAddTask(parentId) {
 
   selectedColorHue = 210;
   buildColorSwatches();
-  buildParentSelect(parentId);
+  buildParentSelect(resolvedParentId);
 
   document.getElementById('modal-overlay').classList.add('open');
   setTimeout(() => document.getElementById('f-name').focus(), 50);
@@ -1577,6 +1579,7 @@ function saveTask() {
       subtasks: []
     };
 
+    _lastParentId = parentId || null;
     if (parentId) {
       const parent = state.data.find(t => t.TaskID === parentId);
       if (parent) {

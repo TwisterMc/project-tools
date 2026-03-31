@@ -2184,6 +2184,15 @@ document.addEventListener('keydown', e => {
 // ─── INIT ────────────────────────────────────────────────────────────────────
 dayW = parseInt(document.getElementById('zoom-select').value, 10) || 20;
 
+document.getElementById('f-start').addEventListener('change', function() {
+  const end = document.getElementById('f-end');
+  if (end.value && end.value < this.value) end.value = this.value;
+});
+document.getElementById('f-end').addEventListener('change', function() {
+  const start = document.getElementById('f-start');
+  if (start.value && this.value < start.value) this.value = start.value;
+});
+
 (async () => {
   const saved = await dbGet('state');
   if (saved) {

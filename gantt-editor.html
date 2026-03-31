@@ -172,6 +172,32 @@
   .task-row:hover { background: var(--surface2); }
   .task-row.selected { background: rgba(79, 142, 247, 0.1); }
   .task-row.parent-row { background: rgba(255,255,255,0.02); }
+  .task-row.drag-over-top::before,
+  .task-row.drag-over-bottom::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    pointer-events: none;
+    z-index: 10;
+  }
+  .task-row.drag-over-top::before { top: -1px; }
+  .task-row.drag-over-bottom::after { bottom: -1px; }
+  .task-row.dragging-row { opacity: 0.4; }
+  .drag-handle {
+    flex-shrink: 0;
+    width: 12px;
+    color: var(--text3);
+    cursor: grab;
+    font-size: 11px;
+    line-height: 1;
+    letter-spacing: -1px;
+    display: flex;
+    align-items: center;
+    user-select: none;
+  }
+  .drag-handle:active { cursor: grabbing; }
   .task-row.parent-row .task-label { font-weight: 600; color: var(--text); }
 
   .task-indent { flex-shrink: 0; }
@@ -921,6 +947,14 @@ function renderLeft(all) {
     row.dataset.id = task.TaskID;
     row.setAttribute('aria-label', task.TaskName);
 
+    // drag handle
+    const handle = document.createElement('div');
+    handle.className = 'drag-handle';
+    handle.textContent = '⠿';
+    handle.setAttribute('aria-hidden', 'true');
+    handle.addEventListener('pointerdown', e => startRowDrag(e, task, depth > 0 ? parentId : null));
+    row.appendChild(handle);
+
     // indent
     const indent = document.createElement('div');
     indent.className = 'task-indent';
@@ -1578,6 +1612,84 @@ function deleteTask(id, parentId) {
     }
     renderAll();
   });
+}
+
+// ─── ROW DRAG-TO-REORDER ──────────────────────────────────────────────────────
+function startRowDrag(e, task, parentId) {
+  e.preventDefault();
+  e.stopPropagation();
+
+  const dragId = task.TaskID;
+  const list = document.getElementById('task-list');
+  const dragRow = list.querySelector(`.task-row[data-id="${dragId}"]`);
+  dragRow.classList.add('dragging-row');
+
+  let overRow = null;
+  let overPos = null; // 'top' | 'bottom'
+
+  function clearIndicators() {
+    list.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(el => {
+      el.classList.remove('drag-over-top', 'drag-over-bottom');
+    });
+  }
+
+  function onMove(e) {
+    clearIndicators();
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const targetRow = el?.closest('.task-row');
+    if (!targetRow || targetRow === dragRow) { overRow = null; return; }
+
+    const targetId = parseInt(targetRow.dataset.id, 10);
+    const rect = targetRow.getBoundingClientRect();
+    const mid = rect.top + rect.height / 2;
+    overPos = e.clientY < mid ? 'top' : 'bottom';
+    overRow = targetId;
+    targetRow.classList.add(overPos === 'top' ? 'drag-over-top' : 'drag-over-bottom');
+  }
+
+  function onUp() {
+    dragRow.releasePointerCapture(e.pointerId);
+    dragRow.removeEventListener('pointermove', onMove);
+    dragRow.removeEventListener('pointerup', onUp);
+    dragRow.removeEventListener('pointercancel', onUp);
+    dragRow.classList.remove('dragging-row');
+    clearIndicators();
+
+    if (overRow === null || overRow === dragId) return;
+
+    // Find the flat rows to understand context
+    const rows = flatTasks();
+    const overEntry = rows.find(r => r.task.TaskID === overRow);
+    const dragEntry = rows.find(r => r.task.TaskID === dragId);
+    if (!overEntry || !dragEntry) return;
+
+    // Only allow reorder within the same level/parent
+    const sameParent = (dragEntry.parentId ?? null) === (overEntry.parentId ?? null);
+    if (!sameParent) return;
+
+    pushHistory();
+
+    const arr = parentId !== null && parentId !== undefined
+      ? state.data.find(t => t.TaskID === parentId)?.subtasks
+      : state.data;
+    if (!arr) return;
+
+    const fromIdx = arr.findIndex(t => t.TaskID === dragId);
+    const toIdxRaw = arr.findIndex(t => t.TaskID === overRow);
+    if (fromIdx === -1 || toIdxRaw === -1) return;
+
+    const [item] = arr.splice(fromIdx, 1);
+    let insertAt = arr.findIndex(t => t.TaskID === overRow);
+    if (overPos === 'bottom') insertAt += 1;
+    arr.splice(insertAt, 0, item);
+
+    renderAll();
+  }
+
+  dragRow.setPointerCapture(e.pointerId);
+  dragRow.addEventListener('pointermove', onMove);
+  dragRow.addEventListener('pointerup', onUp);
+  dragRow.addEventListener('pointercancel', onUp);
 }
 
 // ─── FILE OPS ─────────────────────────────────────────────────────────────────

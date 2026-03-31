@@ -807,18 +807,36 @@ const PALETTE = [
 function hueToColor(hue) {
   if (!hue && hue !== 0) return PALETTE[0].color;
   const n = parseInt(hue, 10);
-  const match = PALETTE.find(p => Math.abs(p.hue - n) < 20);
-  return match ? match.color : `hsl(${n}, 65%, 55%)`;
+  const best = PALETTE.reduce((a, b) => Math.abs(a.hue - n) <= Math.abs(b.hue - n) ? a : b);
+  return Math.abs(best.hue - n) < 20 ? best.color : `hsl(${n}, 65%, 55%)`;
+}
+
+const COLOR_KEYWORDS = [
+  { pattern: /design/i,    hue: 320 }, // Pink
+  { pattern: /wireframe/i, hue: 0   }, // Red
+  { pattern: /dev/i,       hue: 170 }, // Teal
+  { pattern: /qa/i,        hue: 270 }, // Purple
+  { pattern: /live/i,      hue: 90  }, // Lime
+  { pattern: /sitemap/i,   hue: 45  }, // Yellow
+];
+
+function colorForName(name) {
+  for (const kw of COLOR_KEYWORDS) {
+    if (kw.pattern.test(name)) return kw.hue;
+  }
+  return null;
 }
 
 let selectedColorHue = 210;
+let _colorUserPicked = false;
 
 function buildColorSwatches() {
   const el = document.getElementById('color-swatches');
   el.innerHTML = '';
 
-  function selectSwatch(hue) {
+  function selectSwatch(hue, userPicked = false) {
     selectedColorHue = hue;
+    if (userPicked) _colorUserPicked = true;
     el.querySelectorAll('.swatch').forEach(x => {
       const active = parseInt(x.dataset.hue, 10) === hue;
       x.classList.toggle('active', active);
@@ -826,6 +844,9 @@ function buildColorSwatches() {
       x.tabIndex = active ? 0 : -1;
     });
   }
+
+  // Expose for auto-color updates from task name input
+  buildColorSwatches._select = selectSwatch;
 
   PALETTE.forEach((p, idx) => {
     const s = document.createElement('button');
@@ -838,19 +859,19 @@ function buildColorSwatches() {
     s.setAttribute('aria-checked', String(p.hue === selectedColorHue));
     s.dataset.hue = p.hue;
     s.tabIndex = p.hue === selectedColorHue ? 0 : -1;
-    s.onclick = () => selectSwatch(p.hue);
+    s.onclick = () => selectSwatch(p.hue, true);
     s.addEventListener('keydown', ev => {
       const swatches = Array.from(el.querySelectorAll('.swatch'));
       const cur = swatches.indexOf(ev.currentTarget);
       if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') {
         ev.preventDefault();
         const next = (cur + 1) % swatches.length;
-        selectSwatch(parseInt(swatches[next].dataset.hue, 10));
+        selectSwatch(parseInt(swatches[next].dataset.hue, 10), true);
         swatches[next].focus();
       } else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') {
         ev.preventDefault();
         const prev = (cur - 1 + swatches.length) % swatches.length;
-        selectSwatch(parseInt(swatches[prev].dataset.hue, 10));
+        selectSwatch(parseInt(swatches[prev].dataset.hue, 10), true);
         swatches[prev].focus();
       }
     });
@@ -1572,11 +1593,20 @@ function openAddTask(parentId) {
   document.getElementById('f-progress').value = 0;
 
   selectedColorHue = 210;
+  _colorUserPicked = false;
   buildColorSwatches();
   buildParentSelect(resolvedParentId);
 
+  const nameInput = document.getElementById('f-name');
+  nameInput._autoColorHandler = () => {
+    if (_colorUserPicked) return;
+    const hue = colorForName(nameInput.value);
+    if (hue !== null) buildColorSwatches._select(hue, false);
+  };
+  nameInput.addEventListener('input', nameInput._autoColorHandler);
+
   document.getElementById('modal-overlay').classList.add('open');
-  setTimeout(() => document.getElementById('f-name').focus(), 50);
+  setTimeout(() => nameInput.focus(), 50);
 }
 
 function openEditTask(id) {
@@ -1592,6 +1622,11 @@ function openEditTask(id) {
   document.getElementById('f-progress').value = task.Progress || 0;
 
   selectedColorHue = parseInt(task.color, 10) || 210;
+  const nameInputEdit = document.getElementById('f-name');
+  if (nameInputEdit._autoColorHandler) {
+    nameInputEdit.removeEventListener('input', nameInputEdit._autoColorHandler);
+    nameInputEdit._autoColorHandler = null;
+  }
   buildColorSwatches();
 
   // Find parentId
@@ -1621,6 +1656,11 @@ function buildParentSelect(selectedParentId) {
 function closeModal(e) {
   if (e && e.target !== document.getElementById('modal-overlay')) return;
   document.getElementById('modal-overlay').classList.remove('open');
+  const nameInput = document.getElementById('f-name');
+  if (nameInput._autoColorHandler) {
+    nameInput.removeEventListener('input', nameInput._autoColorHandler);
+    nameInput._autoColorHandler = null;
+  }
   _modalReturnEl?.focus();
   _modalReturnEl = null;
   _modalReturnId = null;

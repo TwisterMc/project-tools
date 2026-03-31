@@ -816,7 +816,7 @@ function parseDate(str) {
 
 function toDateStr(d) {
   if (!d) return '';
-  const dt = new Date(d);
+  const dt = typeof d === 'string' ? parseDate(d) : new Date(d);
   const y = dt.getFullYear();
   const mo = String(dt.getMonth() + 1).padStart(2, '0');
   const day = String(dt.getDate()).padStart(2, '0');
@@ -1100,7 +1100,7 @@ function renderGantt(all) {
     // Task bar
     if (task.StartDate && task.EndDate) {
       const x = dateToX(task.StartDate);
-      const w = Math.max(dateToX(task.EndDate) - x, dayW < 14 ? dayW * 7 : dayW);
+      const w = Math.max(dateToX(task.EndDate) + dayW - x, dayW < 14 ? dayW * 7 : dayW);
 
       const minBarW = dayW < 14 ? dayW * 7 : dayW;
       const bar = document.createElement('div');
@@ -1285,7 +1285,7 @@ function startDrag(e, task) {
   const startX = e.clientX;
   const origStart = parseDate(task.StartDate);
   const origEnd = parseDate(task.EndDate);
-  const dur = diffDays(origStart, origEnd);
+  const dur = diffDays(origStart, origEnd) + 1;
   const minBarW = dayW < 14 ? dayW * 7 : dayW;
 
   // Snapshot subtask original dates (for parent-drag bulk shift)
@@ -1294,7 +1294,7 @@ function startDrag(e, task) {
     task: s,
     start: parseDate(s.StartDate),
     end: parseDate(s.EndDate),
-    dur: diffDays(parseDate(s.StartDate), parseDate(s.EndDate)),
+    dur: diffDays(parseDate(s.StartDate), parseDate(s.EndDate)) + 1,
     bar: document.querySelector(`.gantt-row[data-id="${s.TaskID}"] .task-bar`),
   }));
 
@@ -1306,7 +1306,7 @@ function startDrag(e, task) {
     task.EndDate = toDateStr(addDays(origEnd, daysDelta));
     task.Duration = dur;
     const x = dateToX(task.StartDate);
-    const w = dateToX(task.EndDate) - x;
+    const w = dateToX(task.EndDate) + dayW - x;
     bar.style.left = x + 'px';
     bar.style.width = Math.max(w, minBarW) + 'px';
 
@@ -1317,7 +1317,7 @@ function startDrag(e, task) {
       sub.Duration = sd;
       if (subBar) {
         const sx = dateToX(sub.StartDate);
-        const sw = dateToX(sub.EndDate) - sx;
+        const sw = dateToX(sub.EndDate) + dayW - sx;
         subBar.style.left = sx + 'px';
         subBar.style.width = Math.max(sw, minBarW) + 'px';
       }
@@ -1353,16 +1353,16 @@ function startResize(e, task, side) {
     const daysDelta = Math.round(dx / dayW);
     if (side === 'left') {
       const newStart = addDays(origStart, daysDelta);
-      if (newStart >= origEnd) return;
+      if (newStart > origEnd) return;
       const x = diffDays(minDate, startOfDay(newStart)) * dayW;
-      const w = diffDays(startOfDay(newStart), startOfDay(origEnd)) * dayW;
+      const w = (diffDays(startOfDay(newStart), startOfDay(origEnd)) + 1) * dayW;
       bar.style.left = x + 'px';
       bar.style.width = Math.max(w, minBarW) + 'px';
     } else {
       const newEnd = addDays(origEnd, daysDelta);
-      if (newEnd <= origStart) return;
+      if (newEnd < origStart) return;
       const x = diffDays(minDate, startOfDay(origStart)) * dayW;
-      const w = diffDays(startOfDay(origStart), startOfDay(newEnd)) * dayW;
+      const w = (diffDays(startOfDay(origStart), startOfDay(newEnd)) + 1) * dayW;
       bar.style.width = Math.max(w, minBarW) + 'px';
     }
   }
@@ -1375,15 +1375,15 @@ function startResize(e, task, side) {
     const daysDelta = Math.round(dx / dayW);
     if (side === 'left') {
       const newStart = addDays(origStart, daysDelta);
-      if (newStart < origEnd) {
+      if (newStart <= origEnd) {
         task.StartDate = toDateStr(newStart);
-        task.Duration = diffDays(task.StartDate, task.EndDate);
+        task.Duration = diffDays(task.StartDate, task.EndDate) + 1;
       }
     } else {
       const newEnd = addDays(origEnd, daysDelta);
-      if (newEnd > origStart) {
+      if (newEnd >= origStart) {
         task.EndDate = toDateStr(newEnd);
-        task.Duration = diffDays(task.StartDate, task.EndDate);
+        task.Duration = diffDays(task.StartDate, task.EndDate) + 1;
       }
     }
     renderAll();
@@ -1504,7 +1504,7 @@ function saveTask() {
     task.TaskName = name;
     task.StartDate = start;
     task.EndDate = end;
-    task.Duration = diffDays(start, end);
+    task.Duration = diffDays(start, end) + 1;
     task.Progress = progress;
     task.color = String(selectedColorHue);
 
@@ -1533,7 +1533,7 @@ function saveTask() {
       TaskName: name,
       StartDate: start,
       EndDate: end,
-      Duration: diffDays(start, end),
+      Duration: diffDays(start, end) + 1,
       Progress: progress,
       color: String(selectedColorHue),
       Predecessor: null,
@@ -1859,7 +1859,7 @@ function exportPNG() {
     if (task.StartDate && task.EndDate) {
       const x = dateToX(task.StartDate);
       const minBarW = dayW < 14 ? dayW * 7 : dayW;
-      const barW = Math.max(dateToX(task.EndDate) - x, minBarW);
+      const barW = Math.max(dateToX(task.EndDate) + dayW - x, minBarW);
       const barH = isParent ? 8 : 22;
       const barX = gx + x;
       const barY = ry + (ROW_H - barH) / 2;
@@ -1957,7 +1957,7 @@ function syncParentDates() {
     if (!parentStart || parentStart > minSubStart) t.StartDate = toDateStr(minSubStart);
     // Parent may end after subtasks but not before
     if (!parentEnd || parentEnd < maxSubEnd) t.EndDate = toDateStr(maxSubEnd);
-    t.Duration = diffDays(t.StartDate, t.EndDate);
+    t.Duration = diffDays(t.StartDate, t.EndDate) + 1;
   });
 }
 

@@ -151,6 +151,19 @@
     gap: 8px;
     flex-shrink: 0;
   }
+  #search-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    border-radius: 5px;
+    padding: 0 8px;
+    height: 28px;
+    font-size: 12px;
+    display: none;
+  }
+  #search-input:focus { outline: none; border-color: var(--accent); }
+  #search-input.visible { display: block; }
 
   #task-list {
     flex: 1;
@@ -603,7 +616,10 @@
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Task
       </button>
-      <span style="color:var(--text3);font-size:11px;margin-left:auto;" id="task-count">0 tasks</span>
+      <input id="search-input" type="text" placeholder="Search tasks…" aria-label="Search tasks">
+      <button id="search-btn" class="icon-btn" style="margin-left:auto;" aria-label="Search tasks" onclick="toggleSearch()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </button>
     </div>
     <div id="task-list"></div>
   </div>
@@ -944,6 +960,7 @@ function renderLeft(all) {
     const row = document.createElement('div');
     row.className = 'task-row' + (isParent ? ' parent-row' : '');
     row.dataset.id = task.TaskID;
+    if (parentId) row.dataset.parent = parentId;
     row.setAttribute('aria-label', task.TaskName);
 
     // drag handle
@@ -1031,7 +1048,7 @@ function renderLeft(all) {
     list.appendChild(row);
   });
 
-  document.getElementById('task-count').textContent = all.length + ' tasks';
+  applySearch();
 }
 
 // ─── RENDER GANTT ─────────────────────────────────────────────────────────────
@@ -1455,6 +1472,52 @@ function moveTooltip(e) {
 }
 function hideTooltip() {
   document.getElementById('tooltip').style.display = 'none';
+}
+
+// ─── SEARCH ──────────────────────────────────────────────────────────────────
+function toggleSearch() {
+  const input = document.getElementById('search-input');
+  const btn = document.getElementById('search-btn');
+  const visible = input.classList.toggle('visible');
+  btn.style.color = visible ? 'var(--accent)' : '';
+  if (visible) {
+    input.focus();
+  } else {
+    input.value = '';
+    applySearch();
+  }
+}
+
+function applySearch() {
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  const rows = document.querySelectorAll('#task-list .task-row');
+  if (!q) {
+    rows.forEach(r => r.style.display = '');
+    document.querySelectorAll('#gantt-rows .gantt-row').forEach(r => r.style.display = '');
+    return;
+  }
+
+  const matchIds = new Set();
+  rows.forEach(row => {
+    const label = row.querySelector('.task-label')?.textContent.toLowerCase() || '';
+    if (label.includes(q)) matchIds.add(row.dataset.id);
+  });
+
+  // expand to include parents of matches and children of matching parents
+  const showIds = new Set(matchIds);
+  rows.forEach(row => {
+    const id = row.dataset.id;
+    const pid = row.dataset.parent;
+    if (pid && matchIds.has(pid)) showIds.add(id); // parent matched → show children
+    if (pid && matchIds.has(id)) showIds.add(pid); // child matched → show parent
+  });
+
+  rows.forEach(row => {
+    const show = showIds.has(row.dataset.id);
+    row.style.display = show ? '' : 'none';
+    const ganttRow = document.querySelector(`#gantt-rows .gantt-row[data-id="${row.dataset.id}"]`);
+    if (ganttRow) ganttRow.style.display = show ? '' : 'none';
+  });
 }
 
 // ─── COLLAPSE ────────────────────────────────────────────────────────────────
@@ -2192,6 +2255,10 @@ document.addEventListener('keydown', e => {
 dayW = parseInt(document.getElementById('zoom-select').value, 10) || 20;
 
 document.getElementById('gantt-scroll').addEventListener('scroll', updateMonthLabels);
+document.getElementById('search-input').addEventListener('input', applySearch);
+document.getElementById('search-input').addEventListener('keydown', e => {
+  if (e.key === 'Escape') toggleSearch();
+});
 
 document.getElementById('f-start').addEventListener('change', function() {
   const end = document.getElementById('f-end');

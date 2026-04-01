@@ -260,6 +260,37 @@ svg#connections {
 }
 
 /* MODAL */
+/* ── Welcome dialog ── */
+#welcome-dialog {
+  border: none;
+  background: transparent;
+  padding: 0;
+  overflow: visible;
+  inset: 0;
+  margin: auto;
+  width: fit-content;
+  height: fit-content;
+}
+#welcome-dialog::backdrop {
+  background: rgba(0,0,0,0.25);
+  backdrop-filter: blur(1px);
+}
+#welcome-box {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 28px;
+  width: 380px;
+  max-width: 95vw;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#welcome-box h3 { font-size: 15px; font-weight: 600; color: var(--text); }
+#welcome-box p { font-size: 13px; color: var(--text2); line-height: 1.6; }
+#welcome-box .modal-actions { margin-top: 8px; }
+
 #modal-overlay {
   border: none;
   background: transparent;
@@ -1257,7 +1288,31 @@ function saveState() {
     if (name) document.getElementById('project-name').value = name;
   }
   render();
+
+  if (!localStorage.getItem('sitemap_welcomed')) {
+    const dlg = document.getElementById('welcome-dialog');
+    dlg.showModal();
+    document.getElementById('welcome-dismiss').focus();
+    function dismissWelcome() {
+      localStorage.setItem('sitemap_welcomed', '1');
+      dlg.close();
+    }
+    document.getElementById('welcome-dismiss').addEventListener('click', dismissWelcome);
+    dlg.addEventListener('cancel', () => localStorage.setItem('sitemap_welcomed', '1'));
+  }
 })();
 </script>
+
+<dialog id="welcome-dialog" aria-labelledby="welcome-title">
+  <div id="welcome-box">
+    <h3 id="welcome-title">Welcome to Sitemap Editor</h3>
+    <p>This tool saves your data locally in your browser and also has an export function.</p>
+    <p>You're free to use it as you like, but we're not responsible for any data loss.</p>
+    <div class="modal-actions">
+      <button id="welcome-dismiss" class="btn primary">Got it</button>
+    </div>
+  </div>
+</dialog>
+
 </body>
 </html>

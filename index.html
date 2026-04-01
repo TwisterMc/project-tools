@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tools</title>
+<style>
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0f1117;
+  --surface: #171b24;
+  --surface2: #1e2330;
+  --border: #2a3045;
+  --border2: #353d55;
+  --text: #e8eaf0;
+  --text2: #8892a8;
+  --text3: #555f78;
+  --accent: #4f8ef7;
+  --accent2: #3a7de8;
+  --radius: 10px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+footer {
+  text-align: center;
+  margin-top: 48px;
+}
+
+header h1 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+header p, footer p {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: var(--text2);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  width: 100%;
+  max-width: 640px;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+  cursor: pointer;
+}
+
+.card:hover {
+  background: var(--surface2);
+  border-color: var(--border2);
+  transform: translateY(-2px);
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.card-icon svg {
+  width: 20px;
+  height: 20px;
+  stroke: var(--accent);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.card-icon.warm {
+  background: color-mix(in srgb, #f79c4f 15%, transparent);
+}
+
+.card-icon.warm svg {
+  stroke: #f79c4f;
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.card-desc {
+  font-size: 0.825rem;
+  color: var(--text2);
+  line-height: 1.5;
+}
+
+.card-arrow {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--text2);
+  transition: color 0.15s, gap 0.15s;
+}
+
+.card:hover .card-arrow {
+  color: var(--accent);
+  gap: 7px;
+}
+
+.card-arrow svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+footer a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+footer a:hover {
+  color: var(--accent2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .card:hover {
+    transform: none;
+  }
+  .card-arrow {
+    transition: color 0.15s;
+  }
+}
+
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Tools</h1>
+  <p>A small collection of browser-based utilities.</p>
+</header>
+
+<main>
+<nav aria-label="Tools">
+<ul class="grid">
+
+  <li><a class="card" href="gantt-editor.html">
+    <div class="card-icon">
+      <svg aria-hidden="true" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="18" rx="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+        <line x1="8" y1="14" x2="13" y2="14"/>
+        <line x1="8" y1="18" x2="11" y2="18"/>
+      </svg>
+    </div>
+    <div class="card-body">
+      <div class="card-title">Gantt Editor | Beta</div>
+      <div class="card-desc">Plan and track projects with tasks, subtasks, dependencies, and a zoomable timeline.</div>
+    </div>
+    <div class="card-arrow">
+      Open
+      <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </div>
+  </a></li>
+
+  <li><a class="card" href="sitemap-editor.html">
+    <div class="card-icon warm">
+      <svg aria-hidden="true" viewBox="0 0 24 24">
+        <rect x="9" y="2" width="6" height="4" rx="1"/>
+        <rect x="2" y="17" width="6" height="4" rx="1"/>
+        <rect x="9" y="17" width="6" height="4" rx="1"/>
+        <rect x="16" y="17" width="6" height="4" rx="1"/>
+        <line x1="12" y1="6" x2="12" y2="10"/>
+        <line x1="5" y1="10" x2="19" y2="10"/>
+        <line x1="5" y1="10" x2="5" y2="17"/>
+        <line x1="12" y1="10" x2="12" y2="17"/>
+        <line x1="19" y1="10" x2="19" y2="17"/>
+      </svg>
+    </div>
+    <div class="card-body">
+      <div class="card-title">Sitemap Editor | Alpha</div>
+      <div class="card-desc">Visually design and export site architecture with a node-based hierarchy editor.</div>
+    </div>
+    <div class="card-arrow">
+      Open
+      <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </div>
+  </a></li>
+
+</ul>
+</nav>
+</main>
+
+<footer>
+  <p>These tools save information locally in your browser and also have an export function.</p>
+  <p>You're free to use them as you like, but we're not responsible for any data loss.</p>
+  <p>Created by <a href="https://www.twistermc.com/">TwisterMc</a></p>
+  </footer>
+
+</body>
+</html>

@@ -2377,6 +2377,11 @@ document.getElementById('f-end').addEventListener('change', function() {
   const lastExport = await dbGet('lastExport');
   updateLastExportLabel(lastExport);
   setInterval(checkExportStaleness, 4 * 60 * 60 * 1000); // check every 4 hours
+  const searchInput = document.getElementById('search-input');
+  if (searchInput.value.trim()) {
+    searchInput.classList.add('visible');
+    document.getElementById('search-btn').style.color = 'var(--accent)';
+  }
   renderAll();
 })();
 </script>

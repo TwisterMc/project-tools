@@ -1086,8 +1086,6 @@ function renderLeft(all) {
     row.onclick = () => openEditTask(task.TaskID);
     list.appendChild(row);
   });
-
-  applySearch();
 }
 
 // ─── RENDER GANTT ─────────────────────────────────────────────────────────────
@@ -2265,6 +2263,7 @@ function renderAll() {
   const all = allTasks();
   renderLeft(all);
   renderGantt(all);
+  applySearch();
   updateMonthLabels();
   _dbSaveState(state);
   _dbSaveName(document.getElementById('project-name').value);

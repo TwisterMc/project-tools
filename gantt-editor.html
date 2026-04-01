@@ -812,12 +812,12 @@ function hueToColor(hue) {
 }
 
 const COLOR_KEYWORDS = [
-  { pattern: /design/i,    hue: 320 }, // Pink
-  { pattern: /wireframe/i, hue: 0   }, // Red
-  { pattern: /dev/i,       hue: 170 }, // Teal
-  { pattern: /qa/i,        hue: 270 }, // Purple
-  { pattern: /live/i,      hue: 90  }, // Lime
-  { pattern: /sitemap/i,   hue: 45  }, // Yellow
+  { pattern: /\bdesign\b/i,    hue: 320 }, // Pink
+  { pattern: /\bwireframe\b/i, hue: 0   }, // Red
+  { pattern: /\bdev\b/i,       hue: 170 }, // Teal
+  { pattern: /\bqa\b/i,        hue: 270 }, // Purple
+  { pattern: /\blive\b/i,      hue: 90  }, // Lime
+  { pattern: /\bsitemap\b/i,   hue: 45  }, // Yellow
 ];
 
 function colorForName(name) {

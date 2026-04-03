@@ -1628,7 +1628,7 @@ function openAddTask(parentId) {
   document.getElementById('modal-title').textContent = resolvedParentId ? 'Add Subtask' : 'Add Task';
   document.getElementById('f-name').value = '';
   document.getElementById('f-start').value = toDateStr(new Date());
-  document.getElementById('f-end').value = toDateStr(addDays(new Date(), 7));
+  document.getElementById('f-end').value = toDateStr(addDays(new Date(), 11));
   document.getElementById('f-progress').value = 0;
 
   selectedColorHue = 210;

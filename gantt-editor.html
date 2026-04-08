@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gantt</title>
+<script src="https://accounts.google.com/gsi/client" async defer onload="gdriveInit()"></script>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iMyIgeT0iNCIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNGY4ZWY3IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjxsaW5lIHgxPSIxNiIgeTE9IjIiIHgyPSIxNiIgeTI9IjYiIHN0cm9rZT0iIzRmOGVmNyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48bGluZSB4MT0iOCIgeTE9IjIiIHgyPSI4IiB5Mj0iNiIgc3Ryb2tlPSIjNGY4ZWY3IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjxsaW5lIHgxPSIzIiB5MT0iMTAiIHgyPSIyMSIgeTI9IjEwIiBzdHJva2U9IiM0ZjhlZjciIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PGxpbmUgeDE9IjgiIHkxPSIxNCIgeDI9IjEzIiB5Mj0iMTQiIHN0cm9rZT0iIzRmOGVmNyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48bGluZSB4MT0iOCIgeTE9IjE4IiB4Mj0iMTEiIHkyPSIxOCIgc3Ryb2tlPSIjNGY4ZWY3IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==">
 <style>
 
@@ -616,6 +617,40 @@
     #welcome-overlay { transition: none; }
   }
 
+  /* GOOGLE DRIVE */
+  #drive-area { display: flex; align-items: center; gap: 8px; }
+  #drive-connected { display: none; align-items: center; gap: 8px; }
+  #drive-status { font-size: 11px; color: var(--text2); white-space: nowrap; }
+  #drive-picker-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55); z-index: 1500;
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(2px);
+  }
+  #drive-picker-overlay.open { display: flex; }
+  #drive-picker-box {
+    background: var(--surface); border: 1px solid var(--border2);
+    border-radius: 10px; padding: 24px; width: 400px;
+    max-height: 520px; display: flex; flex-direction: column;
+    gap: 16px; box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  }
+  #drive-picker-box h3 { font-size: 15px; font-weight: 600; }
+  #drive-file-list {
+    display: flex; flex-direction: column; gap: 4px;
+    overflow-y: auto; max-height: 340px;
+    color: var(--text2); font-size: 13px;
+  }
+  .drive-file-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; border-radius: 6px; cursor: pointer;
+    border: 1px solid transparent; background: none;
+    color: var(--text); font-family: system-ui, sans-serif;
+    text-align: left; width: 100%; transition: background 0.15s;
+  }
+  .drive-file-item:hover { background: var(--surface2); border-color: var(--border); }
+  .drive-file-item .file-name { font-size: 13px; font-weight: 500; }
+  .drive-file-item .file-date { font-size: 11px; color: var(--text2); }
+
 </style>
 </head>
 <body>
@@ -640,6 +675,24 @@
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
     Export PNG
   </button>
+  <div class="divider"></div>
+  <div id="drive-area">
+    <button id="drive-connect-btn" class="btn" onclick="gdriveSignIn()" title="Save charts to your Google Drive">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>
+      Connect Drive
+    </button>
+    <div id="drive-connected">
+      <button class="btn" onclick="gdriveShowPicker()" title="Open a chart from Google Drive">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        Open from Drive
+      </button>
+      <span id="drive-status"></span>
+      <button class="btn" onclick="gdriveSaveNow()" title="Save to Drive now">Save now</button>
+      <button class="icon-btn" onclick="gdriveSignOut()" aria-label="Disconnect Google Drive" title="Disconnect Drive">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
   <div class="spacer"></div>
   <div class="zoom-group">
     <label for="zoom-select">ZOOM</label>
@@ -762,6 +815,18 @@
 
 <!-- TOAST -->
 <div id="toast" role="alert" aria-live="assertive" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--red);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:2000;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.4);"></div>
+
+<!-- DRIVE FILE PICKER -->
+<div id="drive-picker-overlay" onclick="if(event.target===this)gdriveClosePicker()">
+  <div id="drive-picker-box">
+    <h3>Open from Google Drive</h3>
+    <div id="drive-file-list">Loading…</div>
+    <div class="modal-actions">
+      <button class="btn" onclick="gdriveClosePicker()">Cancel</button>
+      <button class="btn primary" onclick="gdriveNewFile()">New chart in Drive</button>
+    </div>
+  </div>
+</div>
 
 <!-- HIDDEN FILE INPUT -->
 <input type="file" id="file-input" accept=".gantt" style="display:none;" onchange="loadFile(event)">
@@ -2282,6 +2347,200 @@ function syncParentDates() {
   });
 }
 
+// ─── GOOGLE DRIVE ────────────────────────────────────────────────────────────
+// Replace 'YOUR_CLIENT_ID' with your OAuth 2.0 client ID from Google Cloud Console.
+// Authorized JavaScript origin must include your GitHub Pages URL.
+const GOOGLE_CLIENT_ID = '134539570321-pqahodm4j3lmvfe8a1bq6ttv91ht5ahc.apps.googleusercontent.com';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+
+let _driveToken = null;
+let _driveTokenExpiry = 0;
+let _driveFileId = null;
+let _driveDirty = false;
+let _driveLastSaved = null;
+let _tokenClient = null;
+let _driveStatusTimer = null;
+
+function gdriveInit() {
+  if (typeof google === 'undefined' || GOOGLE_CLIENT_ID.startsWith('YOUR_')) return;
+  _tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: DRIVE_SCOPE,
+    callback: async (resp) => {
+      if (resp.error) { console.warn('Drive auth error:', resp); return; }
+      _driveToken = resp.access_token;
+      _driveTokenExpiry = Date.now() + (resp.expires_in - 60) * 1000;
+      await dbSet('driveConnected', true);
+      const fid = await dbGet('driveFileId');
+      if (fid) {
+        _driveFileId = fid;
+        await gdriveLoadById(fid);
+      }
+      _showDriveConnected();
+    }
+  });
+  dbGet('driveConnected').then(was => {
+    if (was) _tokenClient.requestAccessToken({ prompt: '' });
+  });
+}
+
+function _showDriveConnected() {
+  document.getElementById('drive-connect-btn').style.display = 'none';
+  document.getElementById('drive-connected').style.display = 'flex';
+  updateDriveStatus();
+  if (!_driveStatusTimer) {
+    _driveStatusTimer = setInterval(updateDriveStatus, 15000);
+  }
+}
+
+function updateDriveStatus() {
+  const el = document.getElementById('drive-status');
+  if (!el) return;
+  if (!_driveLastSaved) {
+    el.textContent = _driveFileId ? 'Not yet saved' : 'New file';
+    return;
+  }
+  const ago = Math.round((Date.now() - _driveLastSaved) / 1000);
+  if (ago < 60) el.textContent = `Saved ${ago}s ago`;
+  else if (ago < 3600) el.textContent = `Saved ${Math.round(ago / 60)}m ago`;
+  else el.textContent = `Saved ${Math.round(ago / 3600)}h ago`;
+}
+
+function gdriveSignIn() {
+  if (!_tokenClient) { showToast('Google Drive not available — check your client ID'); return; }
+  _tokenClient.requestAccessToken({ prompt: 'consent' });
+}
+
+async function gdriveSignOut() {
+  if (_driveToken) google.accounts.oauth2.revoke(_driveToken, () => {});
+  _driveToken = null;
+  _driveFileId = null;
+  _driveDirty = false;
+  _driveLastSaved = null;
+  clearInterval(_driveStatusTimer);
+  _driveStatusTimer = null;
+  await dbSet('driveConnected', false);
+  await dbSet('driveFileId', null);
+  document.getElementById('drive-connect-btn').style.display = '';
+  document.getElementById('drive-connected').style.display = 'none';
+}
+
+async function _driveRequest(method, url, body) {
+  if (!_driveToken) return null;
+  const resp = await fetch(url, {
+    method,
+    headers: { Authorization: `Bearer ${_driveToken}` },
+    body
+  });
+  if (resp.status === 401) {
+    _driveToken = null;
+    if (_tokenClient) _tokenClient.requestAccessToken({ prompt: '' });
+    return null;
+  }
+  return resp;
+}
+
+async function gdriveSave() {
+  if (!_driveToken) return;
+  const name = document.getElementById('project-name').value.trim() || 'project';
+  const content = JSON.stringify(state, null, 2);
+  const metadata = _driveFileId
+    ? { mimeType: 'application/json' }
+    : { name: name + '.gantt', mimeType: 'application/json' };
+
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', new Blob([content], { type: 'application/json' }));
+
+  const url = _driveFileId
+    ? `https://www.googleapis.com/upload/drive/v3/files/${_driveFileId}?uploadType=multipart`
+    : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+  const method = _driveFileId ? 'PATCH' : 'POST';
+
+  const resp = await _driveRequest(method, url, form);
+  if (!resp || !resp.ok) return;
+
+  const data = await resp.json();
+  if (!_driveFileId) {
+    _driveFileId = data.id;
+    await dbSet('driveFileId', _driveFileId);
+  }
+  _driveDirty = false;
+  _driveLastSaved = Date.now();
+  updateDriveStatus();
+}
+
+async function gdriveSaveNow() {
+  await gdriveSave();
+  showToast('Saved to Drive');
+}
+
+async function gdriveLoadById(fileId) {
+  const resp = await _driveRequest('GET', `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+  if (!resp) return;
+  if (resp.status === 404) {
+    _driveFileId = null;
+    await dbSet('driveFileId', null);
+    return;
+  }
+  if (!resp.ok) return;
+  const data = await resp.json();
+  if (!data.data || !Array.isArray(data.data)) return;
+  state = { ...state, ...data };
+  _driveDirty = false;
+  _driveLastSaved = Date.now();
+  collapsed.clear();
+  renderAll();
+  const name = await dbGet('name');
+  if (name) document.getElementById('project-name').value = name;
+}
+
+async function gdriveShowPicker() {
+  const overlay = document.getElementById('drive-picker-overlay');
+  overlay.classList.add('open');
+  const list = document.getElementById('drive-file-list');
+  list.textContent = 'Loading…';
+
+  const q = encodeURIComponent("name contains '.gantt' and trashed=false");
+  const resp = await _driveRequest('GET',
+    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime+desc`
+  );
+
+  if (!resp || !resp.ok) { list.textContent = 'Could not load files.'; return; }
+  const data = await resp.json();
+  const files = data.files || [];
+
+  if (!files.length) { list.textContent = 'No .gantt files found in Drive.'; return; }
+
+  list.innerHTML = '';
+  files.forEach(f => {
+    const item = document.createElement('button');
+    item.className = 'drive-file-item';
+    const d = new Date(f.modifiedTime).toLocaleDateString();
+    item.innerHTML = `<span class="file-name">${f.name.replace(/\.gantt$/i, '')}</span><span class="file-date">${d}</span>`;
+    item.addEventListener('click', async () => {
+      gdriveClosePicker();
+      _driveFileId = f.id;
+      await dbSet('driveFileId', f.id);
+      await gdriveLoadById(f.id);
+    });
+    list.appendChild(item);
+  });
+}
+
+function gdriveClosePicker() {
+  document.getElementById('drive-picker-overlay').classList.remove('open');
+}
+
+async function gdriveNewFile() {
+  gdriveClosePicker();
+  _driveFileId = null;
+  _driveLastSaved = null;
+  await dbSet('driveFileId', null);
+  updateDriveStatus();
+  showToast('New chart — will save as a new file in Drive');
+}
+
 function debounce(fn, ms) {
   let timer;
   return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
@@ -2308,6 +2567,7 @@ function renderAll() {
   updateMonthLabels();
   _dbSaveState(state);
   _dbSaveName(document.getElementById('project-name').value);
+  _driveDirty = true;
 }
 
 // ─── PANEL RESIZE ────────────────────────────────────────────────────────────
@@ -2418,6 +2678,17 @@ document.getElementById('f-end').addEventListener('change', function() {
   const lastExport = await dbGet('lastExport');
   updateLastExportLabel(lastExport);
   setInterval(checkExportStaleness, 4 * 60 * 60 * 1000); // check every 4 hours
+
+  // Drive auto-save every 30 seconds (only if dirty and connected)
+  setInterval(async () => {
+    if (_driveDirty && _driveToken) await gdriveSave();
+  }, 30000);
+
+  window.addEventListener('beforeunload', () => {
+    if (_driveDirty && _driveToken) gdriveSave();
+  });
+
+  gdriveInit();
   const searchInput = document.getElementById('search-input');
   if (searchInput.value.trim()) {
     searchInput.classList.add('visible');
@@ -2425,14 +2696,14 @@ document.getElementById('f-end').addEventListener('change', function() {
   }
   renderAll();
 
-  if (!localStorage.getItem('gantt_welcomed')) {
+  if (!localStorage.getItem('gantt_welcomed_v2')) {
     const overlay = document.getElementById('welcome-overlay');
     const btn = document.getElementById('welcome-dismiss');
     overlay.classList.add('open');
     btn.focus();
     function dismissWelcome() {
       overlay.classList.add('hiding');
-      localStorage.setItem('gantt_welcomed', '1');
+      localStorage.setItem('gantt_welcomed_v2', '1');
       overlay.addEventListener('transitionend', () => { overlay.classList.remove('open', 'hiding'); }, { once: true });
     }
     btn.addEventListener('click', dismissWelcome);
@@ -2444,8 +2715,8 @@ document.getElementById('f-end').addEventListener('change', function() {
 <div id="welcome-overlay" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
   <div id="welcome-box">
     <h3 id="welcome-title">Welcome to Gantt Editor</h3>
-    <p>This tool saves your data locally in your browser and also has an export function.</p>
-    <p>You're free to use it as you like, but we're not responsible for any data loss.</p>
+    <p>Your data saves automatically to your browser. To keep it safe across devices, click <strong>Connect Drive</strong> in the toolbar to auto-save to Google Drive every 30 seconds.</p>
+    <p>You can also export .gantt files locally as a backup. We're not responsible for any data loss.</p>
     <div class="modal-actions">
       <button id="welcome-dismiss" class="btn primary">Got it</button>
     </div>

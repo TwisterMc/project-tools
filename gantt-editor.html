@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gantt</title>
+<script src="https://accounts.google.com/gsi/client" async defer onload="gdriveInitGIS()"></script>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iMyIgeT0iNCIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNGY4ZWY3IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjxsaW5lIHgxPSIxNiIgeTE9IjIiIHgyPSIxNiIgeTI9IjYiIHN0cm9rZT0iIzRmOGVmNyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48bGluZSB4MT0iOCIgeTE9IjIiIHgyPSI4IiB5Mj0iNiIgc3Ryb2tlPSIjNGY4ZWY3IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjxsaW5lIHgxPSIzIiB5MT0iMTAiIHgyPSIyMSIgeTI9IjEwIiBzdHJva2U9IiM0ZjhlZjciIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PGxpbmUgeDE9IjgiIHkxPSIxNCIgeDI9IjEzIiB5Mj0iMTQiIHN0cm9rZT0iIzRmOGVmNyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48bGluZSB4MT0iOCIgeTE9IjE4IiB4Mj0iMTEiIHkyPSIxOCIgc3Ryb2tlPSIjNGY4ZWY3IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==">
 <style>
 
@@ -2359,6 +2360,7 @@ let _driveTokenExpiry = 0;
 let _driveFileId = null;
 let _driveDirty = false;
 let _driveLastSaved = null;
+let _tokenClient = null;
 let _driveStatusTimer = null;
 
 function gdriveInit() {
@@ -2384,6 +2386,31 @@ function gdriveInit() {
       return;
     }
     if (error) { dbSet('driveConnected', false); return; }
+  }
+}
+
+// Called by GIS script onload — handles silent re-auth (hidden iframe, no popup)
+function gdriveInitGIS() {
+  if (GOOGLE_CLIENT_ID.startsWith('YOUR_') || typeof google === 'undefined') return;
+  _tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: DRIVE_SCOPE,
+    callback: async (resp) => {
+      if (resp.error) { console.warn('Drive auth error:', resp); return; }
+      _driveToken = resp.access_token;
+      _driveTokenExpiry = Date.now() + (parseInt(resp.expires_in, 10) - 60) * 1000;
+      if (!_driveFileId) {
+        const fid = await dbGet('driveFileId');
+        if (fid) { _driveFileId = fid; await gdriveLoadById(fid); }
+      }
+      _showDriveConnected();
+    }
+  });
+  // Silent re-auth on load if previously connected (uses hidden iframe, not a popup)
+  if (!_driveToken) {
+    dbGet('driveConnected').then(was => {
+      if (was) _tokenClient.requestAccessToken({ prompt: '' });
+    });
   }
 }
 
@@ -2445,10 +2472,14 @@ async function _driveRequest(method, url, body) {
   });
   if (resp.status === 401) {
     _driveToken = null;
-    await dbSet('driveConnected', false);
-    document.getElementById('drive-connect-btn').style.display = '';
-    document.getElementById('drive-connected').style.display = 'none';
-    showToast('Drive session expired — click Connect Drive to reconnect');
+    if (_tokenClient) {
+      _tokenClient.requestAccessToken({ prompt: '' });
+    } else {
+      await dbSet('driveConnected', false);
+      document.getElementById('drive-connect-btn').style.display = '';
+      document.getElementById('drive-connected').style.display = 'none';
+      showToast('Drive session expired — click Connect Drive to reconnect');
+    }
     return null;
   }
   return resp;

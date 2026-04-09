@@ -1995,7 +1995,7 @@ function saveFile() {
   updateLastExportLabel(now);
 }
 
-function updateLastExportLabel(iso) {
+function updateLastExportLabel(iso, driveLastSaved) {
   const btn = document.getElementById('export-btn');
   if (!btn) return;
   btn.classList.remove('export-stale');
@@ -2006,7 +2006,8 @@ function updateLastExportLabel(iso) {
   btn.title = 'Last exported ' + fmt;
   const hoursAgo = (Date.now() - d.getTime()) / 36e5;
   if (hoursAgo > 24) btn.classList.add('export-stale');
-  if (hoursAgo > 48) {
+  const driveSavedRecently = (driveLastSaved || _driveLastSaved) && (Date.now() - (driveLastSaved || _driveLastSaved)) / 36e5 < 48;
+  if (hoursAgo > 48 && !driveSavedRecently) {
     document.getElementById('export-warn-msg').textContent =
       'Your project hasn\'t been exported in over 2 days (last exported ' + fmt + '). Consider saving a copy.';
     document.getElementById('export-warn-overlay').style.display = 'flex';
@@ -2015,7 +2016,8 @@ function updateLastExportLabel(iso) {
 
 async function checkExportStaleness() {
   const iso = await dbGet('lastExport');
-  updateLastExportLabel(iso);
+  const driveLastSaved = await dbGet('driveLastSaved');
+  updateLastExportLabel(iso, driveLastSaved);
 }
 
 function exportPNG() {
@@ -2467,6 +2469,7 @@ async function gdriveSave() {
   }
   _driveDirty = false;
   _driveLastSaved = Date.now();
+  await dbSet('driveLastSaved', _driveLastSaved);
   updateDriveStatus();
 }
 
@@ -2676,7 +2679,8 @@ document.getElementById('f-end').addEventListener('change', function() {
     collapsed.clear();
   }
   const lastExport = await dbGet('lastExport');
-  updateLastExportLabel(lastExport);
+  const driveLastSaved = await dbGet('driveLastSaved');
+  updateLastExportLabel(lastExport, driveLastSaved);
   setInterval(checkExportStaleness, 4 * 60 * 60 * 1000); // check every 4 hours
 
   // Drive auto-save every 30 seconds (only if dirty and connected)

@@ -173,7 +173,7 @@
 
   #task-list {
     flex: 1;
-    overflow-y: auto;
+    overflow-y: hidden;
     overflow-x: hidden;
   }
 
@@ -2699,6 +2699,17 @@ document.addEventListener('keydown', e => {
 dayW = parseInt(document.getElementById('zoom-select').value, 10) || 20;
 
 document.getElementById('gantt-scroll').addEventListener('scroll', updateMonthLabels);
+
+// Unified vertical scroll: task list follows gantt scroll; wheel on left panel drives gantt
+(function() {
+  const gs = document.getElementById('gantt-scroll');
+  const tl = document.getElementById('task-list');
+  gs.addEventListener('scroll', () => { tl.scrollTop = gs.scrollTop; });
+  document.getElementById('left-panel').addEventListener('wheel', (e) => {
+    e.preventDefault();
+    gs.scrollBy({ top: e.deltaY, left: 0 });
+  }, { passive: false });
+}());
 document.getElementById('search-input').addEventListener('input', applySearch);
 document.getElementById('search-input').addEventListener('keydown', e => {
   if (e.key === 'Escape') toggleSearch();

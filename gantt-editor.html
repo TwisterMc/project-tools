@@ -2005,8 +2005,11 @@ function updateLastExportLabel(iso, driveLastSaved) {
   btn.title = 'Last exported ' + fmt;
   const hoursAgo = (Date.now() - d.getTime()) / 36e5;
   if (hoursAgo > 24) btn.classList.add('export-stale');
-  const driveSavedRecently = (driveLastSaved || _driveLastSaved) && (Date.now() - (driveLastSaved || _driveLastSaved)) / 36e5 < 48;
-  if (hoursAgo > 48 && !driveSavedRecently) {
+  const effectiveDriveSaved = driveLastSaved || _driveLastSaved || 0;
+  const lastBackup = Math.max(d.getTime(), effectiveDriveSaved);
+  const driveSavedRecently = effectiveDriveSaved && (Date.now() - effectiveDriveSaved) / 36e5 < 48;
+  const hasUnbackedChanges = _lastModified > lastBackup;
+  if (hoursAgo > 48 && !driveSavedRecently && hasUnbackedChanges) {
     document.getElementById('export-warn-msg').textContent =
       'Your project hasn\'t been exported in over 2 days (last exported ' + fmt + '). Export a .gantt file or connect Google Drive to keep your data safe.';
     document.getElementById('export-warn-overlay').style.display = 'flex';
@@ -2361,6 +2364,9 @@ let _driveDirty = false;
 let _driveLastSaved = null;
 let _driveStatusTimer = null;
 
+let _lastModified = 0;
+let _initialLoad = true;
+
 function gdriveInit() {
   if (GOOGLE_CLIENT_ID.startsWith('YOUR_')) return;
 
@@ -2603,6 +2609,7 @@ function renderAll() {
   _dbSaveState(state);
   _dbSaveName(document.getElementById('project-name').value);
   _driveDirty = true;
+  if (!_initialLoad) { _lastModified = Date.now(); dbSet('lastModified', _lastModified); }
 }
 
 // ─── PANEL RESIZE ────────────────────────────────────────────────────────────
@@ -2753,6 +2760,8 @@ document.getElementById('f-end').addEventListener('change', function() {
     document.getElementById('search-btn').style.color = 'var(--accent)';
   }
   renderAll();
+  _initialLoad = false;
+  _lastModified = (await dbGet('lastModified')) || 0;
 
   if (!localStorage.getItem('gantt_welcomed_v2')) {
     const overlay = document.getElementById('welcome-overlay');

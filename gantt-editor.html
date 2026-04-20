@@ -226,12 +226,12 @@
     background: transparent;
     border: none;
     color: var(--text3);
-    cursor: pointer;
     font-size: 9px;
     flex-shrink: 0;
     transition: color 0.1s;
   }
-  .expand-btn:hover { color: var(--text); }
+  button.expand-btn { cursor: pointer; }
+  button.expand-btn:hover { color: var(--text); }
 
   .color-dot {
     width: 8px; height: 8px;
@@ -414,6 +414,9 @@
     border-radius: 2px;
     background: var(--text3) !important;
   }
+  .task-bar.hidden-bar { opacity: 0.35; cursor: default; }
+  .task-row.hidden-project .task-label { color: var(--text3); font-style: italic; }
+  .task-row.hidden-project { cursor: default; }
 
   .resize-handle {
     position: absolute;
@@ -1023,7 +1026,7 @@ function flatTasks() {
   const rows = [];
   state.data.forEach(t => {
     rows.push({ task: t, depth: 0, isParent: !!(t.subtasks && t.subtasks.length) });
-    if (t.subtasks && t.subtasks.length && !collapsed.has(t.TaskID)) {
+    if (t.subtasks && t.subtasks.length && !collapsed.has(t.TaskID) && !t.hidden) {
       t.subtasks.forEach(s => {
         rows.push({ task: s, depth: 1, isParent: false, parentId: t.TaskID });
       });
@@ -1102,7 +1105,7 @@ function renderLeft(all) {
   list.innerHTML = '';
   rows.forEach(({ task, depth, isParent, parentId }) => {
     const row = document.createElement('div');
-    row.className = 'task-row' + (isParent ? ' parent-row' : '');
+    row.className = 'task-row' + (isParent ? ' parent-row' : '') + (task.hidden ? ' hidden-project' : '');
     row.dataset.id = task.TaskID;
     if (parentId) row.dataset.parent = parentId;
     row.setAttribute('aria-label', task.TaskName);
@@ -1122,17 +1125,26 @@ function renderLeft(all) {
     row.appendChild(indent);
 
     // expand btn
-    const exp = document.createElement('button');
-    exp.className = 'expand-btn';
-    if (isParent) {
-      const isCollapsed = collapsed.has(task.TaskID);
-      exp.textContent = isCollapsed ? '▶' : '▼';
-      exp.setAttribute('aria-expanded', String(!isCollapsed));
-      exp.setAttribute('aria-label', isCollapsed ? 'Expand task' : 'Collapse task');
-      exp.onclick = (e) => { e.stopPropagation(); toggleCollapse(task.TaskID); };
-    } else {
-      exp.style.visibility = 'hidden';
+    let exp;
+    if (isParent && task.hidden) {
+      exp = document.createElement('span');
+      exp.className = 'expand-btn';
+      exp.textContent = '▶';
+      exp.style.opacity = '0.3';
       exp.setAttribute('aria-hidden', 'true');
+    } else {
+      exp = document.createElement('button');
+      exp.className = 'expand-btn';
+      if (isParent) {
+        const isCollapsed = collapsed.has(task.TaskID);
+        exp.textContent = isCollapsed ? '▶' : '▼';
+        exp.setAttribute('aria-expanded', String(!isCollapsed));
+        exp.setAttribute('aria-label', isCollapsed ? 'Expand task' : 'Collapse task');
+        exp.onclick = (e) => { e.stopPropagation(); toggleCollapse(task.TaskID); };
+      } else {
+        exp.style.visibility = 'hidden';
+        exp.setAttribute('aria-hidden', 'true');
+      }
     }
     row.appendChild(exp);
 
@@ -1141,7 +1153,7 @@ function renderLeft(all) {
     dot.className = 'color-dot';
     if (isParent) {
       dot.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M1 3.5A1.5 1.5 0 0 1 2.5 2H6l1.5 2H13.5A1.5 1.5 0 0 1 15 5.5v7A1.5 1.5 0 0 1 13.5 14h-11A1.5 1.5 0 0 1 1 12.5V3.5Z" fill="currentColor"/></svg>`;
-      dot.style.color = hueToColor(task.color);
+      dot.style.color = task.hidden ? 'var(--text3)' : hueToColor(task.color);
       dot.style.width = '14px';
       dot.style.height = '14px';
       dot.style.display = 'flex';
@@ -1162,22 +1174,36 @@ function renderLeft(all) {
     actions.className = 'task-actions';
 
     if (isParent) {
-      const addSub = document.createElement('button');
-      addSub.className = 'icon-btn';
-      addSub.title = 'Add subtask';
-      addSub.setAttribute('aria-label', 'Add subtask');
-      addSub.textContent = '+';
-      addSub.onclick = (e) => { e.stopPropagation(); openAddTask(task.TaskID); };
-      actions.appendChild(addSub);
+      const eyeBtn = document.createElement('button');
+      eyeBtn.className = 'icon-btn';
+      eyeBtn.title = task.hidden ? 'Show project' : 'Hide project';
+      eyeBtn.setAttribute('aria-label', task.hidden ? 'Show project' : 'Hide project');
+      eyeBtn.innerHTML = task.hidden
+        ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
+        : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+      eyeBtn.onclick = (e) => { e.stopPropagation(); toggleHidden(task.TaskID); };
+      actions.appendChild(eyeBtn);
+
+      if (!task.hidden) {
+        const addSub = document.createElement('button');
+        addSub.className = 'icon-btn';
+        addSub.title = 'Add subtask';
+        addSub.setAttribute('aria-label', 'Add subtask');
+        addSub.textContent = '+';
+        addSub.onclick = (e) => { e.stopPropagation(); openAddTask(task.TaskID); };
+        actions.appendChild(addSub);
+      }
     }
 
-    const editBtn = document.createElement('button');
-    editBtn.className = 'icon-btn';
-    editBtn.title = 'Edit';
-    editBtn.setAttribute('aria-label', 'Edit task');
-    editBtn.textContent = '✎';
-    editBtn.onclick = (e) => { e.stopPropagation(); openEditTask(task.TaskID); };
-    actions.appendChild(editBtn);
+    if (!task.hidden) {
+      const editBtn = document.createElement('button');
+      editBtn.className = 'icon-btn';
+      editBtn.title = 'Edit';
+      editBtn.setAttribute('aria-label', 'Edit task');
+      editBtn.textContent = '✎';
+      editBtn.onclick = (e) => { e.stopPropagation(); openEditTask(task.TaskID); };
+      actions.appendChild(editBtn);
+    }
 
     const delBtn = document.createElement('button');
     delBtn.className = 'icon-btn del';
@@ -1188,7 +1214,7 @@ function renderLeft(all) {
     actions.appendChild(delBtn);
 
     row.appendChild(actions);
-    row.onclick = () => openEditTask(task.TaskID);
+    row.onclick = () => { if (!task.hidden) openEditTask(task.TaskID); };
     list.appendChild(row);
   });
 }
@@ -1303,7 +1329,7 @@ function renderGantt(all) {
       const x = dateToX(task.StartDate);
       const w = Math.max(dateToX(task.EndDate) + dayW - x, minBarW());
       const bar = document.createElement('div');
-      bar.className = 'task-bar' + (isParent ? ' parent-bar' : '');
+      bar.className = 'task-bar' + (isParent ? ' parent-bar' : '') + (task.hidden ? ' hidden-bar' : '');
       bar.style.left = x + 'px';
       bar.style.width = w + 'px';
       bar.style.top = '50%';
@@ -1311,7 +1337,7 @@ function renderGantt(all) {
 
       if (isParent) {
         // Drag parent bar — shifts all subtasks with it
-        bar.addEventListener('pointerdown', e => startDrag(e, task));
+        if (!task.hidden) bar.addEventListener('pointerdown', e => startDrag(e, task));
         bar.addEventListener('mouseenter', e => showTooltip(e, task));
         bar.addEventListener('mousemove', e => moveTooltip(e));
         bar.addEventListener('mouseleave', hideTooltip);
@@ -1681,6 +1707,13 @@ function toggleCollapse(id) {
   if (collapsed.has(id)) collapsed.delete(id);
   else collapsed.add(id);
   dbSet('collapsed', [...collapsed]);
+  renderAll();
+}
+
+function toggleHidden(id) {
+  const task = state.data.find(t => t.TaskID === id);
+  if (!task) return;
+  task.hidden = !task.hidden;
   renderAll();
 }
 
@@ -2088,7 +2121,7 @@ function exportPNG() {
     ctx.fillRect(0, ry + ROW_H - 1, leftW, 1);
 
     const dotCenterX = 8 + depth * 16 + 16 + 6 + 4;
-    ctx.fillStyle = hueToColor(task.color);
+    ctx.fillStyle = task.hidden ? TEXT3 : hueToColor(task.color);
     ctx.beginPath();
     ctx.arc(dotCenterX, ry + ROW_H / 2, 4, 0, Math.PI * 2);
     ctx.fill();
@@ -2096,8 +2129,8 @@ function exportPNG() {
     const labelX = dotCenterX + 4 + 6;
     const maxLabelW = leftW - labelX - 8;
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = isParent ? TEXT : TEXT2;
-    ctx.font = (isParent ? '600 ' : '') + '12.5px DM Sans, sans-serif';
+    ctx.fillStyle = task.hidden ? TEXT3 : (isParent ? TEXT : TEXT2);
+    ctx.font = (isParent && !task.hidden ? '600 ' : '') + '12.5px DM Sans, sans-serif';
     let name = task.TaskName;
     while (name.length > 1 && ctx.measureText(name).width > maxLabelW) name = name.slice(0, -1);
     if (name !== task.TaskName) name = name.slice(0, -1) + '\u2026';
@@ -2257,10 +2290,12 @@ function exportPNG() {
       const barY = ry + (ROW_H - barH) / 2;
 
       if (isParent) {
+        ctx.globalAlpha = task.hidden ? 0.35 : 1;
         ctx.fillStyle = TEXT3;
         ctx.beginPath();
         ctx.roundRect(barX, barY, barW, barH, 2);
         ctx.fill();
+        ctx.globalAlpha = 1;
       } else {
         const color = hueToColor(task.color);
         ctx.fillStyle = color;

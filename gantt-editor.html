@@ -2008,7 +2008,7 @@ function updateLastExportLabel(iso, driveLastSaved) {
   const driveSavedRecently = (driveLastSaved || _driveLastSaved) && (Date.now() - (driveLastSaved || _driveLastSaved)) / 36e5 < 48;
   if (hoursAgo > 48 && !driveSavedRecently) {
     document.getElementById('export-warn-msg').textContent =
-      'Your project hasn\'t been exported in over 2 days (last exported ' + fmt + '). Consider saving a copy.';
+      'Your project hasn\'t been exported in over 2 days (last exported ' + fmt + '). Export a .gantt file or connect Google Drive to keep your data safe.';
     document.getElementById('export-warn-overlay').style.display = 'flex';
   }
 }
@@ -2501,6 +2501,7 @@ async function gdriveSave() {
   _driveLastSaved = Date.now();
   await dbSet('driveLastSaved', _driveLastSaved);
   updateDriveStatus();
+  document.getElementById('export-warn-overlay').style.display = 'none';
 }
 
 async function gdriveSaveNow() {
@@ -2524,6 +2525,7 @@ async function gdriveLoadById(fileId) {
   _driveLastSaved = Date.now();
   collapsed.clear();
   renderAll();
+  document.getElementById('export-warn-overlay').style.display = 'none';
   const name = await dbGet('name');
   if (name) document.getElementById('project-name').value = name;
 }

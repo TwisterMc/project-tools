@@ -1680,6 +1680,7 @@ function applySearch() {
 function toggleCollapse(id) {
   if (collapsed.has(id)) collapsed.delete(id);
   else collapsed.add(id);
+  dbSet('collapsed', [...collapsed]);
   renderAll();
 }
 
@@ -1971,6 +1972,7 @@ function loadFile(e) {
       document.getElementById('project-name').value =
         file.name.replace(/\.gantt$/i, '');
       collapsed.clear();
+      dbSet('collapsed', []);
       renderAll();
     } catch(err) {
       showToast('Could not parse .gantt file: ' + err.message);
@@ -2737,7 +2739,8 @@ document.getElementById('f-end').addEventListener('change', function() {
     state = { ...state, ...saved };
     const name = await dbGet('name');
     if (name) document.getElementById('project-name').value = name;
-    collapsed.clear();
+    const savedCollapsed = await dbGet('collapsed');
+    collapsed = new Set(Array.isArray(savedCollapsed) ? savedCollapsed : []);
   }
   const lastExport = await dbGet('lastExport');
   const driveLastSaved = await dbGet('driveLastSaved');

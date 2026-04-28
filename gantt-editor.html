@@ -2393,7 +2393,7 @@ function syncParentDates() {
 // Replace 'YOUR_CLIENT_ID' with your OAuth 2.0 client ID from Google Cloud Console.
 // Authorized JavaScript origin must include your GitHub Pages URL.
 const GOOGLE_CLIENT_ID = '134539570321-pqahodm4j3lmvfe8a1bq6ttv91ht5ahc.apps.googleusercontent.com';
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
 
 let _driveToken = null;
 let _driveTokenExpiry = 0;
@@ -2529,8 +2529,8 @@ async function gdriveSave() {
   form.append('file', new Blob([content], { type: 'application/json' }));
 
   const url = _driveFileId
-    ? `https://www.googleapis.com/upload/drive/v3/files/${_driveFileId}?uploadType=multipart`
-    : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+    ? `https://www.googleapis.com/upload/drive/v3/files/${_driveFileId}?uploadType=multipart&supportsAllDrives=true`
+    : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true';
   const method = _driveFileId ? 'PATCH' : 'POST';
 
   const resp = await _driveRequest(method, url, form);
@@ -2554,7 +2554,7 @@ async function gdriveSaveNow() {
 }
 
 async function gdriveLoadById(fileId) {
-  const resp = await _driveRequest('GET', `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+  const resp = await _driveRequest('GET', `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`);
   if (!resp) return;
   if (resp.status === 404) {
     _driveFileId = null;
@@ -2582,7 +2582,7 @@ async function gdriveShowPicker() {
 
   const q = encodeURIComponent("name contains '.gantt' and trashed=false");
   const resp = await _driveRequest('GET',
-    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime+desc`
+    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime+desc&includeItemsFromAllDrives=true&supportsAllDrives=true&corpora=allDrives`
   );
 
   if (!resp || !resp.ok) { list.textContent = 'Could not load files.'; return; }
